@@ -1,0 +1,3685 @@
+<!-- eslint-disable @html-eslint/element-newline -->
+<!-- eslint-disable @html-eslint/indent -->
+<!-- eslint-disable @html-eslint/require-doctype -->
+<!-- eslint-disable @html-eslint/require-closing-tags -->
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=width-device, initial-scale=1.0">
+  <title>Camera Control</title>
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" crossorigin="anonymous">
+  <script src="glosStatus.js"></script>
+  <script src="userProtect.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+
+
+  <style>
+    .camera-status {
+      width: 100px;
+      height: 100px;
+      margin: 10px auto;
+      border: 1px solid #ddd;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      color: white;
+    }
+
+    #floatingDiv {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: lightgray;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+      display: none;
+    }
+
+    .countdown-text {
+      font-size: 3em;
+    }
+
+    #showCapture {
+      color: red;
+      font-size: 15em;
+      background-color: black;
+      width: 100%;
+      height: 50%;
+      position: absolute;
+      top: 0%;
+      display: none;
+    }
+
+    #woordje {
+      color: white;
+      font-size: 0.5em;
+      position: absolute;
+      left: 25%;
+    }
+
+    #videoPlayerArea {
+      display: none;
+    }
+
+    .output_canvas {
+      z-index: 1;
+    }
+
+    .progress {
+      --bs-progress-bar-transition: width 0s ease !important;
+    }
+
+    #bodyText {
+      color: red;
+    }
+
+    .floating-div {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 1567;
+      background-color: transparent;
+      font-size: 15em;
+      display: none;
+    }
+
+    .floating-down {
+      position: absolute;
+      top: 10%;
+      left: 10%;
+      transform: translate(-50%, -50%);
+      z-index: 1567;
+      background-color: transparent;
+      font-size: 5em;
+      display: none;
+    }
+
+    #headBox {
+      min-width: 100%;
+      max-width: 100%;
+    }
+
+    #myVideo1 {
+      display: none;
+    }
+
+    #myVideo2 {
+      display: none;
+    }
+
+    #myVideo3 {
+      display: none;
+    }
+
+    .modal-backdrop {
+      background-color: transparent !important;
+    }
+
+    .videoClass {
+      width: 75%;
+    }
+
+    #webcam {
+      z-index: 1;
+      object-position: 100% 100%;
+      object-fit: unset;
+      position: absolute;
+      width: 100%;
+      height: 100%;
+    }
+/* 
+    #signbankVideoDiv {
+      width: 75% !important;
+    } */
+
+    #woordId {
+      font-size: 65px;
+      margin: 5%;
+    }
+    #themaId {
+      font-size: 15px;
+      margin: 2%;
+    }
+
+    #bodyText {
+      font-size: 10px;
+    }
+
+    #bezigStoppen {
+      z-index: 10000;
+    }
+
+    #listGlossesDiv {
+      display: none;
+    }
+
+    #officeVideo {
+    transform: rotate(-90deg);
+    transform-origin: center;
+}
+
+
+#countdownOverlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: black;
+    color: white;
+    font-size: 10em;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+#captureDiv{
+  z-index: 2000;
+  display: none;
+  position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+}
+
+    
+
+.camera-name {
+      text-align: center;
+      margin-top: 10px;
+      font-weight: bold;
+      color: #333;
+    }
+    .error-message {
+      color: red;
+      text-align: center;
+      margin-top: 20px;
+      white-space: pre-wrap; /* Preserve line breaks */
+    }
+    /* Adjusted: Increased max-height to make videos larger */
+    .ratio {
+      max-height: 1200px; /* Doubled from 400px to 800px */
+    }
+    /* New: Rotate video elements clockwise by 90 degrees */
+    .rotated-video {
+      transform: rotate(-90deg);
+      /* To prevent clipping, adjust the transform-origin if necessary */
+      transform-origin: center center;
+      /* Optional: Smooth rotation */
+      transition: transform 0.3s ease;
+      /* Ensure the video scales properly after rotation */
+      width: 100%;
+      height: 1200px;
+    }
+    /* Optional: Adjust modal body to accommodate larger videos */
+    #webcamModal.modal-body {
+      overflow-y: auto;
+    }
+    #webcamModal.modal {
+      --bs-modal-width: 100vw !important; /* Adjusted from 75vw to 90vw */
+    }
+    #webcamModal .modal-dialog-scrollable .modal-body{
+      height: 1200px;
+    }
+
+    .rotated-video:hover {
+    transform: rotate(90deg) scale(2);
+    z-index: 10000; /* Bring the video to the front */
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3); /* Optional: Add a shadow for emphasis */
+    cursor: pointer; /* Change cursor to indicate interactivity */
+  }
+
+  </style>
+</head>
+
+<body>
+
+  <div id="floatingDiv">3</div> <!-- The countdown will display here -->
+
+  <div class="position-relative overflow-hidden">
+
+    <div class="d-flex min-vh-100" lc-helper="video-bg">
+      <video id="webcam" autoplay="" preload="" muted="" loop="" playsinline="">
+      </video>
+      <canvas class="output_canvas" id="output_canvas" style="position: absolute; left: 0px; top: 0px;"></canvas>
+      <div style="position: relative;">
+        <p id="gesture_output" class="output"></p>
+      </div>
+      <div style="z-index:2" class="align-self-center text-center text-light" id="headBox">
+        <div class="lc-block mb-4">
+          <div editable="rich">
+            <button type="button" class="btn btn-primary" onclick="openOpnameView()">
+              Overzicht al opgenomen/niet opgenomen
+            </button>
+            <button type="button" class="btn btn-primary" onclick="openUserModal()">
+              Menu
+            </button>
+            <button type="button" class="btn btn-primary" onclick="startCalibration()">
+              Charuso board calibratie (VOOR ALS JE EEN VAN DE CAMERAS HEBT AANGERAAKT!
+              &#x1F914;)
+            </button>
+            <button type="button" class="btn btn-primary" onclick="formatModal()">
+              Starten formatten
+            </button>
+            <button type="button" class="btn btn-primary" onclick="openCheckSettings()">
+              Openen Camera Tabel (Voor probleem oplossing)
+            </button>
+            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#webcamModal">
+              View Live Streams
+            </button>
+                <button type="button" class="btn btn-primary" onclick="startDownloadConfirm()">
+              Start downloading video's.
+            </button>
+            <input type="checkbox" id="enableTimerCheckbox">Timer</input>
+            <input type="range" id="timerSlider" min="1" max="10" value="5"> Timer Delay (sec) </input>
+            <p id="timeValue">3</p>
+            
+            <p id="nogTeGaan"></p>
+            <div class="p-5 mb-4 lc-block" style=" backdrop-filter: blur(6px) saturate(102%);
+                        -webkit-backdrop-filter: blur(6px) saturate(102%);
+                        background-color: rgba(255, 255, 255, 0.45);
+                        border-radius: 12px;
+                        border: 1px solid rgba(209, 213, 219, 0.3);">
+              <div class="lc-block">
+
+                <div editable="rich">
+                  <h2 class="fw-bolder display-3">
+
+                    <div id="bodyText">
+                      Wachtend op signaal...
+                    </div>
+                    <div id="cameraText"></div>
+                    <div id="videoPlayingText"></div>
+
+                    <div id="filmId">
+                        <div class="row videoRow g-0" id="videoRow">
+                            <div class="col-md-6 p-0 d-flex justify-content-center align-items-center" id="officeVideoDiv">
+                              <video id="officeVideo" class="videoClass w-80 h-80" controls muted autoplay loop src="blob:https://signcollect.nl/1314fb03-7a44-48e8-9bdf-0eee703219b4"></video>
+                            </div>
+                            <div class="col-md-6 p-0 d-flex justify-content-center align-items-center" id="signbankVideoDiv">
+                              <div id="themaId"></div>
+                              <div id="woordId"></div>
+                              <video id="signbankVideo" class="videoClass w-80 h-80" controls muted loop src=""></video>
+                            </div>
+                       
+                          </div>
+                        
+                      <button onclick="prevButton()" id="prevButton">Vorige</button>
+                      <button onclick="nextButton()" id="nextButton">Volgende</button>
+                    </div>
+                    <div class="col-md-5" id="CharucoBoardDiv">
+                      Charuco board calibration in progress. Press B to start capturing.
+                    </div>
+                  </h2>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <section id="demos" class="invisible"></section>
+
+  <div id="showCapture">
+    <div id="captureText"></div>
+    <div id="woordje"></div>
+    <div id="fileDisplayArea"></div>
+  </div>
+  <div id="videoPlayerArea">
+    <video id="videoPlayer" width="640" height="480" controls>
+      Your browser does not support the video tag.
+    </video>
+  </div>
+
+  <div class="floating-div">
+    <p id="floating-text">Opnemen...</p>
+  </div>
+
+  <div id="videoDownload" class="floating-down">
+    <p id="floating-texta">Camera Download AAN...</p>
+  </div>
+
+  <div class="modal " id="myModal">
+    <div class="modal-dialog" style="max-width: 100%;">
+      <div class="modal-content">
+        <div class="container">
+          <h2>Corrigeer waarden van de Cameras</h2>
+          <div id="cameraDifferences" class="row"></div>
+
+          <h2>Volg deze waarden</h2>
+
+          <table class="table table-bordered">
+            <thead>
+              <tr>
+                <th>Property</th>
+                <th>Value</th>
+              </tr>
+            </thead>
+            <tbody id="referenceTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade bd-example-modal-lg" role="dialog" id="modalAtt" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+      <div class="modal-content">
+        <div class="container" id="modalAttDiv"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal " id="myModal2">
+    <div class="modal-dialog" style="max-width: 100%;">
+      <div class="modal-content">
+        <div class="container">
+          <h2>Let op, weinig geheugen of lage batterij! <br> Bij batterij wisselen, Charuco calibratie opnieuw!</h2>
+          <table id="tableContainer"></table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal " id="myModal3" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog" style="max-width: 100%;">
+      <div class="modal-content">
+        <div class="container" id="myModal3Div">
+          <h2>Bezig met formatten</h2>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade bd-example-modal-lg " id="selectUsers" tabindex="-1" role="dialog" aria-labelledby="myLargeModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" style="max-width: 100%;">
+      <div class="modal-content">
+        <div class="container">
+          <h2>Wat wil je opnemen?</h2>
+          <button type="button" class="btn btn-primary" onclick="selectType('Zin')">Zin</button>
+          <button type="button" class="btn btn-primary" onclick="selectType('Glos')">Glos</button>
+          <button type="button" class="btn btn-primary" onclick="selectType('nmm')">NMM</button>
+          <button type="button" class="btn btn-primary" onclick="selectType('nmm_oc')">OC</button>
+          <button type="button" class="btn btn-primary" onclick="selectType('Extern')">Extern</button>
+          <button type="button" class="btn btn-primary" onclick="selectType('Tekst')">Tekst</button>
+          <button type="button" class="btn btn-primary" onclick="selectType('Labels')">Labels</button>
+          <button type="button" class="btn btn-primary" onclick="selectType('Begrip')">Begrippen</button>
+          <button type="button" class="btn btn-primary" onclick="selectType('vrij_opnemen')">Vrij opnemen</button>
+
+
+        </div>
+
+        <div class="container">
+          <h2>Welke gebruiker ben je?</h2>
+          <select class="form-select" aria-label="Select Menu" id="selectUsersMenu"></select>
+        </div>
+        <div class="container">
+          <h2>Welke thema wil je opnemen?</h2>
+          <select class="form-select" aria-label="Select Menu" id="selectThemaMenu">          </select>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-primary" onclick="startCalibration()">Calibratie Charuco Board</button>
+          <button type="button" class="btn btn-primary" onclick="ophalenData()">Beginnen</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <div class="modal fade" id="overtweehonderd" tabindex="-1" role="dialog" aria-labelledby="errorModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="errorModalLabel">Error</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <p>Geheugen bijna vol, bezig met automatische upload. De cameras worden daarna geformat. <br> Dit kan even duren.</p>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <div class="modal fade" id="waitModal" tabindex="-1" role="dialog" aria-labelledby="waitModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="waitModalLabel">Wachten op piep.</h5>
+        </div>
+        <div class="modal-body">
+          <p>Ga ik na 10 seconden niet weg? Controleer of geluid aanstaat en op minimaal 60% volume en probeer opnieuw.</p>
+        </div>
+        <div class="modal-footer"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="opnameViewModal" class="modal fade" tabindex="-1" role="dialog" aria-labelledby="opnameViewModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="opnameViewModalLabel">Opname View</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body opnameViewModalBody">
+          <div class="container">
+            <div class="row">
+              <div class="col-md-6">
+                <h3>Opnames die nog gemaakt moeten worden</h3>
+                <table class="table table-bordered">
+                  <thead>
+                    <tr>
+                      <th>Gloss</th>
+                    </tr>
+                  </thead>
+                  <tbody id="nogTeGaanTable"></tbody>
+                </table>
+              </div>
+              <div class="col-md-6">
+                <h3>Opnames die al gemaakt zijn</h3>
+                <table class="table table-bordered">
+                  <thead>
+                    <tr>
+                      <th>Gloss</th>
+                    </tr>
+                  </thead>
+                  <tbody id="alOpgenomenTable"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="emptyVideoTopConfirmModal" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-sm modal-dialog-centered" role="document">
+      <div class="modal-content">
+        <div class="modal-body modal-content">
+          <button type="button" class="btn btn-primary" id="emptyVideoTopConfirmButton" onclick="emptyVideoTopConfirm()">Weet je het zeker?</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="emptyVideoModal" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-sm modal-dialog-centered" role="document">
+      <div class="modal-content">
+        <div class="modal-body modal-content">
+          <div id="emptyVideoModalText"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="bezigStoppen" class="modal fade bd-example-modal-lg" role="dialog">
+    <div class="modal-dialog modal-dialog-centered" role="document" >
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Bezig met stoppen...</h5>
+          </div>
+        <div class="modal-body">
+        <div class="container">
+          <h2>Je hebt te snel op stop knop gedrukt....opnemen wordt automatisch gestopt.</h2>
+        </div>     
+       </div>
+  
+      </div>
+    </div>
+  </div>
+
+  <div id="cameraErrors" class="modal fade bd-example-modal-lg" role="dialog">
+    <div class="modal-dialog modal-dialog-centered" role="document" >
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Een van de camera's reageert niet</h5>
+          </div>
+        <div class="modal-body">
+        <div class="container">
+          <h2>Alle opnames zijn gestopt, controleer verbindingen naar cameras en of ze wel aan zijn.<br> Probeer daarna opnieuw.</h2>
+        </div>     
+       </div>
+  
+      </div>
+    </div>
+  </div>
+
+
+  <div id="bezigDownload" class="modal fade bd-example-modal-lg" role="dialog">
+    <div class="modal-dialog modal-dialog-centered" role="document" >
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Hou de cameras verbonden!</h5>
+          </div>
+        <div class="modal-body">
+        <div class="container">
+          <h2>Bezig met downloaden....</h2>
+        </div>     
+        <div id="downloadContainer"></div> 
+       </div>
+       <div id="downloadContainerText"></div>
+       <div id="debugDownloadFiles">
+        <table id="fileTable">
+          <tbody>
+          </tbody>
+        </table>
+       </div>
+
+      </div>
+    </div>
+  </div>
+  <div id="startFormat" class="modal fade bd-example-modal-lg" role="dialog">
+    <div class="modal-dialog modal-dialog-centered" role="document" >
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Je gaat alle cameras formatteren.</h5>
+          </div>
+        <div class="modal-body">
+        <div class="container">
+          <h2>WEET JE HET ZEKER? DIT KAN NIET ONGEDAAN GEMAAKT WORDEN.</h2>
+        </div>     
+        <div class="modal-footer">
+          <button type="button" class="btn btn-primary" onclick="startFormatConfirm()">Ja, formatteren</button>
+
+          <table id="listFiles" class="table table-striped">
+          </table>
+      </div>
+  
+      </div>
+    </div>
+  </div>
+  </div>
+  
+  
+  <div id="startFormatFormat" class="modal fade bd-example-modal-lg" role="dialog">
+    <div class="modal-dialog modal-dialog-centered" role="document" >
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">LAATSTE KANS</h5>
+          </div>
+        <div class="modal-body">
+        <div class="container">
+          <img src="weetjehetzeker.gif" alt="Weet je het zeker?">
+        </div>     
+        <div class="modal-footer">
+          <button type="button" class="btn btn-primary" onclick="startFormatConfirmConfirm()">Ja, formatteren</button>
+      </div>
+  
+      </div>
+    </div>
+  </div>
+  </div>  
+
+  <div id="qrDesktopModal" class="modal fade bd-example-modal-lg" role="dialog">
+    <div class="modal-dialog modal-dialog-centered" role="document" >
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Wachten op qR desktop</h5>
+          </div>
+        <div class="modal-body">
+        <div class="container">
+          Dit modal gaat weg als er verbinding is met Apple Desktop dat qR website moet openen.
+        </div>       
+      </div>
+    </div>
+  </div>
+  </div>  
+
+
+    <!-- Bootstrap Modal -->
+    <div class="modal fade" id="qrModal" tabindex="-1" aria-labelledby="qrModalLabel" aria-hidden="true" data-backdrop="static" data-keyboard="false">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content bg-dark text-white">
+          <div class="modal-body text-center">
+            <p>Waiting for QR on display...</p>
+            <div class="spinner-border text-light" role="status">
+              <span class="visually-hidden">Loading...</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="downloadConfirmModal" class="modal fade bd-example-modal-lg" role="dialog">
+      <div class="modal-dialog modal-dialog-centered" role="document" >
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Je start met downloaden!</h5>
+            </div>
+          <div class="modal-body text-center">
+          <div class="container text-center">
+            <img src="weetjehetzeker.gif" alt="Weet je het zeker?">
+            <br>            <br>
+
+            <h1>CONTROLEER OF ALLE BATTERIJEN MINIMAAL 50% VOL ZITTEN.</h1>
+          </div>     
+          <div class="modal-footer">
+            <button type="button" class="btn btn-primary" onclick="startDownloadConfirm()">Ja, DOWNLOADEN</button>
+        </div>
+    
+        </div>
+      </div>
+    </div>
+    </div>  
+
+
+      <!-- Modal Structure -->
+      <div class="modal fade" id="webcamModal" tabindex="-1" aria-labelledby="webcamModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xxl modal-dialog-centered modal-dialog-scrollable">
+          <!-- Changed: modal-xl to modal-xxl for extra large modal -->
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title" id="webcamModalLabel">Live Webcam Streams</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+              <!-- First Row of Videos -->
+              <div class="row" id="videoRow1">
+                <!-- Video columns will be injected here -->
+              </div>
+              <!-- Second Row of Videos -->
+              <div class="row" id="videoRow2">
+                <!-- Video columns will be injected here -->
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+<div id="countdownOverlay"></div>
+<div id="captureDiv"></div>
+
+</body>
+
+<script>
+  const socketExt = new WebSocket('wss://signcollect.nl/cameraServer/');
+  const audio = new Audio('high_pitch_sound_0_1_sec.wav');
+  let charucoCheck = 0;
+  let selectedType;
+ let thema;
+ let tempOpnameCounter = 200;
+ let uploadAndFormat = 0;
+ let blob;
+ var glosId = null;
+ let blueTimerValue = 0;
+let blueTimer;
+var timenow;
+let debug;
+
+
+//get debug param from the url
+const urlParams = new URLSearchParams(window.location.search);
+debug = urlParams.get('debug') === 'true' ? true : false;
+
+
+ document.getElementById('timerSlider').addEventListener('input', function () {
+    const timerValue = this.value;
+    document.getElementById('timeValue').innerText = `Timer: ${timerValue} sec`;
+});
+
+// Set the initial value when the page loads
+document.getElementById('timeValue').innerText = `Timer: ${document.getElementById('timerSlider').value} sec`;
+
+
+ function hideOfficeVideo() {
+    // Hide the office video div
+    $('#officeVideoDiv').addClass('d-none');
+
+    // Make the signbank video div take up the full width
+    $('#signbankVideoDiv').removeClass('col-md-6').addClass('col-md-12');
+}
+function showOfficeVideo() {
+    // Show the office video div
+    $('#officeVideoDiv').removeClass('d-none');
+
+    // Reset the signbank video div to take up 50% of the width
+    $('#signbankVideoDiv').removeClass('col-md-12').addClass('col-md-6');
+}
+function selectType(type) {
+    selectedType = type;
+    console.log(selectedType)
+    // $("#qrModal").modal('hide');
+
+    //we are going to empty the selectThemaMenu first
+    $("#selectThemaMenu").empty();
+
+    //when clicking, then we want to refresh selectmenu selectThemaMenu with thema from getrows.php when selected on zin
+    //and thema from fetch_all_glosses.php when selected on glos
+
+    if(type == "Glos") {
+        fetch('uniqueThema.php')
+        .then(response => response.json())
+        .then(data => {
+          
+            const select = document.getElementById('selectThemaMenu');
+            const option = document.createElement('option');
+            option.value = "ALLES";
+            option.textContent = "ALLES";
+            select.appendChild(option);
+            data.forEach(thema => {
+                const option = document.createElement('option');
+                option.value = thema;
+                option.textContent = thema;
+                select.appendChild(option);
+            });
+            //add extra thema ALLES
+            
+
+        })
+        .catch(error => console.error('Error fetching thema data:', error));
+    }
+    if(type == "Extern") {
+        fetch('uniqueThema.php?extern=1')
+        .then(response => response.json())
+        .then(data => {
+          
+            const select = document.getElementById('selectThemaMenu');
+            const option = document.createElement('option');
+            option.value = "ALLES";
+            option.textContent = "ALLES";
+            select.appendChild(option);
+            data.forEach(thema => {
+                const option = document.createElement('option');
+                option.value = thema;
+                option.textContent = thema;
+                select.appendChild(option);
+            });
+            //add extra thema ALLES
+            
+
+        })
+        .catch(error => console.error('Error fetching thema data:', error));
+    }
+    if(type == "Zin") {
+        fetch(`zin/getRows.php?&thema=true`)
+        .then(response => response.json())
+        .then(data => {
+            const select = document.getElementById('selectThemaMenu');
+
+                 const option = document.createElement('option');
+                    option.value = "";
+                    option.textContent = "";
+                    select.appendChild(option);
+
+            data.rows.forEach(thema => {
+                    const option = document.createElement('option');
+                    option.value = thema.thema;
+                    option.textContent = thema.thema;
+                    select.appendChild(option);
+            });
+
+            camerasReconnectStartupRunning = 0;
+        })
+        .catch(error => console.error('Error:', error));
+    }
+    if(type == "nmm") {
+        fetch(`nmm/fetch_themas.php`)
+        .then(response => response.json())
+        .then(data => {
+            const select = document.getElementById('selectThemaMenu');
+
+                 const option = document.createElement('option');
+                    option.value = "";
+                    option.textContent = "";
+                    
+                    select.appendChild(option);
+                    option.value = "ALLES";
+            option.textContent = "ALLES";
+            select.appendChild(option);
+            data.rows.forEach(thema => {
+                    const option = document.createElement('option');
+                    option.value = thema.thema;
+                    option.textContent = thema.thema;
+                    select.appendChild(option);
+            });
+
+            camerasReconnectStartupRunning = 0;
+        })
+        .catch(error => console.error('Error:', error));
+    }
+
+    if(type == "nmm_oc") {
+      const select = document.getElementById('selectThemaMenu');
+
+    const option = document.createElement('option');
+      option.value = "";
+      option.textContent = "";
+      
+      select.appendChild(option);
+      option.value = "ALLES";
+    option.textContent = "ALLES";
+    select.appendChild(option);
+}
+
+if(type == "Tekst") {
+      const select = document.getElementById('selectThemaMenu');
+
+      
+      $.ajax({
+        url: 'hh/api.php',
+        method: 'GET',
+        data: {
+          action: 'content_extended',
+          search: '',
+          page: 1,
+          perPage: 10000,
+          ngt_not_captured: 1
+        },
+        success: function(response) {
+          if (response.data && response.data.length > 0) {
+            contentData = response.data;
+            
+            contentData.forEach(item => {
+              // Extract a title from URL or plain_text
+              let title = item.url ? item.url.split('/').pop() : '';
+              if (!title && item.plain_text) {
+                // Take first 30 chars of text as fallback title
+                title = item.plain_text.substring(0, 30) + (item.plain_text.length > 30 ? '...' : '');
+              }
+              const option = document.createElement('option');
+
+            option.value = item.id;
+          option.textContent = title;
+          select.appendChild(option);
+
+                });
+          } else {
+            select.html('<option value="">No content found</option>');
+          }
+        },
+        error: function(xhr, status, error) {
+          console.error('AJAX error:', error);
+          select.html('<option value="">Error loading content</option>');
+        }
+      });
+}
+
+if(type == "Labels") {
+  const select = document.getElementById('selectThemaMenu');
+
+  $.ajax({
+    url: 'uniqueLabels.php',
+    method: 'GET',
+    success: function(response) {
+      // Assuming the response is a JSON array like:
+      // [{"name":"GGMD/GGZ","color":"#f76707"},{"name":"HealthHolland","color":"#1c7ed6"},{"name":"TYDbase","color":"#ff8787"}]
+      if (response && response.length > 0) {
+        response.forEach(item => {
+          const option = document.createElement('option');
+          // Use the "name" property as both the value and displayed text
+          option.value = item.name;
+          option.textContent = item.name;
+          // Optionally, set the background color to the provided color
+          option.style.backgroundColor = item.color;
+          select.appendChild(option);
+        });
+      } else {
+        $(select).html('<option value="">No content found</option>');
+      }
+    },
+    error: function(xhr, status, error) {
+      console.error('AJAX error:', error);
+      $(select).html('<option value="">Error loading content</option>');
+    }
+  });
+}
+if(type == "Begrip") {
+selectedType = "Begrip";
+
+ophalenData("1", ""); // Call the function with the first page
+
+}
+
+
+
+
+    // $("#selectUsers").modal('hide');
+
+}
+
+function formatModal()
+{
+  $("#startFormat").modal('show');
+  listFiles();
+}
+
+
+function startFormatConfirm(){
+  $("#startFormatFormat").modal('show');
+}
+
+function startFormatConfirmConfirm(){
+  $("#startFormat").modal('hide');
+  $("#startFormatFormat").modal('hide');
+
+        fetchAndProcess('http://localhost:18080/format_media_all', "json");
+}
+
+  function startCalibration() {
+    $("#officeVideo").hide();
+    $("#signbankVideo").hide();
+    $("#CharucoBoardDiv").show();
+    $("#selectUsers").modal('hide');
+    $("#CharucoBoardDiv").text("Formatteren is klaar. Start calibratie Charuco Board. Press B to start capturing.");
+
+
+
+    var today = new Date();
+    var date = today.getFullYear() + '-' + (today.getMonth() + 1) + '-' + today.getDate();
+    var time = today.getHours() + ":" + today.getMinutes() + ":" + today.getSeconds();
+    var dateTime = date + '_' + time;
+    glos = "calibration_" + dateTime;
+    glosId = "9999";
+    charucoCheck = 1;
+    checkAudioFile("9999");
+  }
+
+  function openOpnameView() {
+    $("#opnameViewModal").modal('show');
+  }
+  function openUserModal() {
+    $("#selectUsers").modal('show');
+  } 
+  
+  
+  function openCharuso() {
+    $("#opnameViewModal").modal('show');
+  }
+
+  $(document).ready(function () {
+    $("#selectUsers").modal({});
+    $("#selectUsers").modal('show');
+    $("#bezigDownload").modal({});
+    $("#opnameViewModal").modal({});
+    // $("#waitModal").modal('show');
+    setTimeout(() => {
+      startTestAudio();
+    }, 3000);
+
+    $("#qrDesktopModal").modal({ backdrop: 'static', keyboard: false });
+    $("#qrDesktopModal").modal('show');
+//debug
+    // ophalenData("1", "");
+  });
+
+  let startupFirstTime = 1;
+  let actionShow;
+  let greenLight = -1;
+  let loadedVideos = 0;
+  var startTime;
+  var stopTime;
+  let cA = [];
+  var opnameCounter;
+
+  window.onload = function () {
+    enableCam();
+$("#CharucoBoardDiv").hide();
+  }
+
+  let webcamRunning = false;
+  const videoHeight = $("#webcam").height();
+  const videoWidth = $("#webcam").width();
+  $("#output_canvas").attr("width", videoWidth);
+  $("#output_canvas").attr("height", videoHeight);
+
+  async function startTestAudio() {
+    const audio = new Audio('high_pitch_sound.wav');
+    audio.loop = true;
+    audio.play();
+
+    const beepDetected = await analyzeAudio(5000, 50);
+
+    if (beepDetected) {
+      $("#waitModal").modal('hide');
+    }
+
+    audio.pause();
+  }
+
+  async function analyzeAudio(beepFrequency = 5000, beepWidth = 50) {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const analyser = audioContext.createAnalyser();
+      analyser.fftSize = 2048;
+      const bufferLength = analyser.frequencyBinCount;
+      const dataArray = new Float32Array(bufferLength);
+      const source = audioContext.createMediaStreamSource(stream);
+      source.connect(analyser);
+
+      const sampleRate = audioContext.sampleRate;
+      const nyquist = sampleRate / 2;
+
+      return new Promise((resolve, reject) => {
+        function detectBeep() {
+          analyser.getFloatFrequencyData(dataArray);
+
+          let maxAmplitude = -Infinity;
+          let peakFrequency = 0;
+
+          for (let j = 0; j < bufferLength; j++) {
+            const amplitude = dataArray[j];
+            const frequency = (j * nyquist) / bufferLength;
+
+            if (amplitude > maxAmplitude) {
+              maxAmplitude = amplitude;
+              peakFrequency = frequency;
+            }
+            if (peakFrequency > beepFrequency - beepWidth && peakFrequency < beepFrequency + beepWidth) {
+              clearInterval(intervalId);
+              resolve(true);
+              return;
+            }
+          }
+        }
+
+        const intervalId = setInterval(detectBeep, 100);
+
+        setTimeout(() => {
+          clearInterval(intervalId);
+          resolve(false);
+        }, 10000);
+      });
+    } catch (err) {
+      console.error('Error accessing microphone:', err);
+      return false;
+    }
+  }
+  let scanAnimationFrame;
+  let qrfound = false;
+  const canvasElement = document.getElementById("output_canvas");
+  let qrTime;
+
+  function enableCam(event) {
+    const modal = new bootstrap.Modal(document.getElementById('qrModal'), {
+        backdrop: 'static',
+        keyboard: false
+      });
+    if (webcamRunning === true) {
+      webcamRunning = false;
+    } else {
+      webcamRunning = true;
+    }
+
+    const constraints = {
+      video: true,
+      audio: true
+    };
+
+    navigator.mediaDevices.getUserMedia(constraints).then(function (stream) {
+      webcamElement.srcObject = stream;
+
+      // Show the modal when starting the webcam
+      modal.show();
+      console.log("Webcam started");
+      sendStartorStopCapture(123, "test", "start");
+      //set timenow on qrTime with ms
+      qrTime = new Date().getTime();
+
+      // Start scanning once the video is playing
+        scanAnimationFrame = requestAnimationFrame(tick);
+    });
+  
+  
+  }
+
+
+      // Function to process each video frame
+      function tick() {
+        if (webcamElement.readyState === webcamElement.HAVE_ENOUGH_DATA && qrfound === false) {
+
+          //check first if the modal qrModal is still visible otherwise open it
+          //only open after 2 seconds of no qr found
+          if ($("#qrModal").is(":visible") === false && qrTime + 2000 < new Date().getTime()) {
+            // $("#qrModal").modal('show');
+          }
+
+          // Set canvas dimensions to video dimensions
+          const context = canvasElement.getContext('2d');
+          context.drawImage(webcamElement, 0, 0, canvasElement.width, canvasElement.height);
+          const imageData = context.getImageData(0, 0, canvasElement.width, canvasElement.height);
+          let code = jsQR(imageData.data, imageData.width, imageData.height, {
+            inversionAttempts: "dontInvert",
+          });
+
+          if(debug == 1)
+          {
+            code = 1;
+            qrfound = true;
+            setTimeout(() => {
+              $("#qrModal").modal('hide');
+            }, 2000);
+          }
+
+          if (code) {
+            // QR Code detected
+            console.log("QR Code detected: ", code.data);
+            if(code.data) {
+              qrfound = true;
+            // Hide the modal
+            setTimeout(() => {
+              $("#qrModal").modal('hide');
+            }, 2000);
+            sendStartorStopCapture(123, "test", "stop");
+          }
+
+            // Optionally, perform additional actions with code.data here
+            // For example, display the QR code data on the page
+            // displayQRData(code.data);
+            // Since qrFound is true, scanning will stop, but webcam remains active
+            scanAnimationFrame = requestAnimationFrame(tick);
+
+          } else {
+            // Continue scanning
+            scanAnimationFrame = requestAnimationFrame(tick);
+          }
+        } else {
+          const context = canvasElement.getContext('2d');
+
+          context.drawImage(webcamElement, 0, 0, canvasElement.width, canvasElement.height);
+
+          // Continue scanning
+          scanAnimationFrame = requestAnimationFrame(tick);
+        }
+      }
+  let fileServerOnline = 0;
+  let dataLijst = 1;
+  let totalCameras = 0;
+  let foundSuccess = false;
+  let interval;
+  const myModal = new bootstrap.Modal(document.getElementById('myModal'));
+  const myModal2 = new bootstrap.Modal(document.getElementById('myModal2'));
+  const myModal3 = new bootstrap.Modal(document.getElementById('myModal3'));
+  let camerasReconnectStartupRunning = 0;
+  var glos;
+  const webcamElement = document.getElementById("webcam");
+  var mediaRecorder;
+  let chunks = [];
+  var userId;
+  let videoNumber = 0;
+  var ophalenVideo = false;
+  var enableRecognizer = true;
+  var downloadedFinished = 0;
+  let zelfopname;
+  var startupFormat;
+  var formatOnce = 1;
+
+  async function checkValue() {
+    if (fileServerOnline == 1 && foundSuccess == true) {
+      if (greenLight == -1) {
+        greenLight = 0;
+      }
+      if (dataLijst == 0) {
+        $("#bodyText").text("Lijstje leeg...");
+      }
+    } else {
+      greenLight = -1;
+    }
+
+    if (fileServerOnline == 1 && foundSuccess == true) {
+      if (greenLight >= 0) {
+        if (camerasReconnectStartupRunning == 0) {
+          greenLight = -1;
+          camerasReconnectStartup();
+          $("#bodyText").text("Cameras controleren...");
+        }
+      }
+
+      if (greenLight == 1) {
+        if (actionShow == "start_rec") {
+          $("#bodyText").text("Opnemen...");
+        }
+        if (actionShow == "handen_omlaag") {
+          $("#bodyText").text("Handen Omlaag...");
+        }
+      } else if (greenLight == 2) {
+        $("#bodyText").text("Filmpje ophalen...");
+      } else if (greenLight == 3) {
+        $("#bodyText").text("Wachtend op goedkeuring...");
+      }
+    } else {
+      $("#bodyText").text("Fileserver offline...");
+    }
+  }
+  setInterval(checkValue, 100);
+
+  canvasElement.style.height = videoHeight;
+  webcamElement.style.height = videoHeight;
+  canvasElement.style.width = videoWidth;
+  webcamElement.style.width = videoWidth;
+
+  let downloadCount = 0;
+  function updateProgress(percentage) {
+    const progressBar = document.querySelector('.progress-bar');
+    progressBar.style.width = `${percentage}%`;
+    progressBar.setAttribute('aria-valuenow', percentage);
+  }
+
+  const socket = new WebSocket('ws://localhost:8081');
+
+  socket.addEventListener('open', () => {
+    fileServerOnline = 1;
+    camerasReconnectStartup();
+  });
+
+  var cameraArrayList = [];
+  socket.addEventListener('message', (event) => {
+    if (startupFirstTime == 0) {
+      const rC = JSON.parse(event.data);
+
+      if (event.data) {
+        const cId = rC.cameraId;
+        if (!cA.hasOwnProperty(cId)) {
+          cA[cId] = {};
+          cA[cId]["aantal_opnames"] = 0;
+        }
+
+        if (rC.handle == "fileDownloaded") {
+          console.log(rC.file);
+          // cA[cId]["downloadCount"]++;
+          downloadCount++;
+          // $("#downloadContainer").append(rC.file);
+          // $("#downloadContainer").append("<br>");
+          //we want to display progress bar on the downloadContainer by using downloadCount and opnameCounter
+          opnameCounterA = opnameCounter * 5 //aantal cameras
+          progressBar = (downloadCount / opnameCounterA) * 100;
+          console.log(progressBar, downloadCount, opnameCounterA);
+          //we then create progress bar in downloadContainer
+          $("#downloadContainer").html('<div class="progress"><div class="progress-bar" role="progressbar" style="width: ' + progressBar + '%" aria-valuenow="' + progressBar + '" aria-valuemin="0" aria-valuemax="100"></div></div>'); 
+          // Extract the basename from the filepath
+          const filepath = rC.file;
+          const basename = filepath.split('/').pop();
+
+          // Check if the filename starts with B, A, L, M, or R
+          if (/^[BALMR]/i.test(basename)) {
+            const firstChar = basename.charAt(0).toUpperCase();
+            const tableBody = $('#fileTable tbody');
+
+            // Find if a row with the same starting letter already exists
+            const existingRow = tableBody.find(`tr[data-letter="${firstChar}"]`);
+
+            if (existingRow.length > 0) {
+              // Replace the existing row's filename
+              existingRow.find('.filename').text(basename);
+            } else {
+              // If the table has 5 rows, remove the oldest one
+              if (tableBody.find('tr').length >= 5) {
+                tableBody.find('tr').first().remove();
+              }
+              // Append the new row
+              tableBody.append(`
+                <tr data-letter="${firstChar}">
+                  <td>${firstChar}</td>
+                  <td class="filename">${basename}</td>
+                </tr>
+              `);
+            }
+          }
+
+          // watchDogDownload(1); //we keep resetting the timer to 5 minutes, but if after 5 minutes nothing happens then the cameras will disconnected and reconnected for redownload.
+          //this happens sometimes when the cameras are not responding or my code is just faulty.
+
+          if (cA[cId]["downloadCount"] == opnameCounter) {
+            $("#downloadContainer").append(cA[cId]["cameraId"] + " Klaar");
+            $("#downloadContainer").append("<br>");
+
+            $("#downloadContainer").html("");
+            //we reset the timeNow to 0
+            downloadCount = 0;
+          }
+        }
+
+        if (rC.handle == "recording") {
+          cA[cId]["cameraNumber"] = rC.cameraNumber;
+          cA[cId]["state"] = rC.state;
+
+          if (rC.state == "recording") {
+            startRecording(cA);
+            fetch('fetch_last_capture.php?status=opnameCounterAdd&cameraId=' + cId, {
+              method: 'GET',
+            })
+              .then(response => response.json())
+              .then(data => {
+                cA[cId]["aantal_opnames"] = data["opnameCounter"];
+              })
+              .catch(error => {
+                console.error('Error:', error);
+              });
+              opnameCounterAdd();
+              sendStartorStopCapture(tekstId, "text_start", "start");
+
+    
+
+          } else if (rC.state == "stopping") {
+            stopRecording(rC.cameraNumber, cA, cId);
+            sendStartorStopCapture(tekstId, "text_start", "stop");
+
+          }
+        }
+        if (rC.handle == "reconnecting") {
+          cA[cId]["connected"] = "reconnecting";
+          changeStatus(cA);
+        }
+        if (rC.handle == "connected") {
+          cA[cId]["connected"] = "connected";
+          cA[cId]["sdkMode"] = rC.sdkMode;
+          cA[cId]["cameraNumber"] = rC.cameraNumber;
+          //add rc.cameraNumber to array but only once
+          if (!cameraArrayList.includes(rC.cameraNumber)) {
+            cameraArrayList.push(rC.cameraNumber);
+          }
+
+          changeStatus(cA);
+          opnameCounterAdd();
+        }
+        if (rC.handle == "timeout") {
+          cA[cId]["connected"] = "timeout";
+          changeStatus(cA);
+        }
+        if (rC.handle == "disconnected") {
+          if (statusDownload() == "multiple") {
+            cA[cId]["switchtoSDK"] = 1;
+          }
+          cA[cId]["connected"] = "disconnected";
+          cA[cId]["cameraNumber"] = rC.cameraNumber;
+
+          if (cA[cId]["switchtoSDK"] == 1) {
+            setTimeout(function () {
+              fetchAndProcess('http://localhost:18080/connect_camera_contents_ind', rC.cameraNumber, "json");
+            }, 1000);
+            cA[cId]["switchtoSDK"] = 0;
+          } else {
+            setTimeout(function () {
+              fetchAndProcess('http://localhost:18080/connect_camera_remote_ind', rC.cameraNumber, "json");
+            }, 1000);
+          }
+        }
+        if (rC.handle == "device_prop_failed") {
+          cA[cId]["connected"] = "device_prop_failed";
+          changeStatus(cA);
+        }
+        if (rC.handle == "completed") {
+          cA[cId]["file"] = rC.file;
+          cA[cId]["download"] = "completed";
+          startDisplayingVideos(cId);
+        }
+        if (rC.handle == "completedMultiple") {
+          downloadedFinished++;
+          console.log("downloadedFinished", downloadedFinished, "totalCameras", totalCameras);
+          if (downloadedFinished == totalCameras) {
+            $("#bezigDownload").modal('hide');
+            downloadedFinished = 0;
+            statusDownload("single");
+            //fetchAndProcess('http://localhost:18080/camera_disconnect', rC.cameraNumber, "json");
+
+            fetch('fetch_last_capture.php?processed=0', {
+              method: 'GET',
+            });
+
+            //if cameras memory is nearly empty, then after uploading all media we are going to format the cameras
+            // if (uploadAndFormat == 1) {
+            //   fetchAndProcess('http://localhost:18080/format_media_all', "json");
+            // }x
+            // watchDogDownload(0);
+
+           
+          }
+        }
+        if (rC.handle == "contentsChanged") {
+          if (statusDownload() == "single") {
+            fetchAndProcess('http://localhost:18080/ophalen_movie', rC.cameraNumber, "json");
+          } else {
+            console.log(rC.cameraNumber);
+            fetchAndProcess('http://localhost:18080/ophalen_movie_multiple', rC.cameraNumber, "json");
+            $("#downloadConfirmModal").modal('hide');
+            $("#bezigDownload").modal('show');
+            $("#downloadContainerText").append("<br> Verbonden met Camera " + rC.cameraNumber);
+            //we are going to set timenow to now
+            // watchDogDownload(1);
+          }
+        }
+        if (rC.handle == "contentsDruk") {
+          fetchAndProcess('http://localhost:18080/camera_disconnect_ind', rC.cameraNumber, "json");
+          cA[cId]["switchtoSDK"] = 1;
+        }
+        if (rC.handle == "formatCompleted") {
+          cA[cId]["aantal_opnames"] = 0;
+
+          let klaarFormat = 0;
+          Object.keys(cA).forEach((item) => {
+            if (cA[item]["aantal_opnames"] == 0) {
+              klaarFormat++;
+            }
+          });
+
+          if (klaarFormat == totalCameras) {
+            $("#myModal3Div").append("Camera " + rC.cameraNumber + " Formatten klaar");
+            setTimeout(function () {
+              myModal3.hide();
+            }, 3000);
+            startupFormat = 0;
+
+            fetch('fetch_last_capture.php?status=opnameCounter', {
+              method: 'GET',
+            })
+              .then(response => response.json())
+              .then(data => {
+                if(data.opnameCounter == 0)
+              {
+                console.log("opnameCounter is 0", opnameCounter);
+                opnameCounter = 0
+                startCalibration();
+              }
+              })
+              uploadAndFormat = 0;
+          }
+        }
+      }
+    }
+  });
+
+  socket.addEventListener('close', () => {
+    fileServerOnline = 0;
+  });
+
+  function leegVideos() {
+    $("#modalAttDiv").empty();
+    $("#modalAttDiv").append("Bezig met verwijderen...");
+    $("#modalAtt").modal('show');
+    userId = $("#selectUsersMenu").val();
+    thema = $("#selectThemaMenu").val();
+
+    fetch('helpScripts/emptyVideoTop.php?method=multiple&userId=' + userId + "&thema=" + thema)
+      .then(response => response.json())
+      .then(data => {
+        if (data.status) {
+          $("#modalAtt").modal('hide');
+          ophalenData();
+        }
+      });
+  }
+
+  function startRecord() {
+    fetchAndProcess('http://localhost:18080/start_rec', "json", "json");
+  }
+
+  function stopRecord() {
+    fetchAndProcess('http://localhost:18080/stop_rec', "json", "json");
+  }
+
+  function startRecording(cE) {
+    let captureCameras = 0;
+    Object.keys(cE).forEach((item) => {
+      if (cE[item]["state"] == "recording") {
+        captureCameras++;
+      }
+      if (captureCameras == totalCameras) {
+        //stop the blueTimer
+        clearInterval(blueTimer);
+        mediaRecorder.start();
+        displayStartRecording();
+      } else {
+        //clear the blueTimer first
+        clearInterval(blueTimer);
+        
+        $("#captureDiv").css("background-color", "black");
+        $("#captureDiv").show();
+
+ 
+
+        //start the blueTimer, every second that the screen is blue add it to blueTimerValue
+        blueTimerValue = 0;
+         blueTimer = setInterval(function () {
+          blueTimerValue++;
+
+          if(blueTimerValue == 3) {
+            $("#captureDiv").css("background-color", "blue");
+            $("#captureDiv").show();
+                }
+
+        //if the blueTimerValue is 5 seconds, then we are going to stop the recording
+          if (blueTimerValue == 5) {
+            clearInterval(blueTimer);
+            //it is smarter to use mediaRecorder.stop instead of stoprecord.
+            mediaRecorder.stop();
+            //display modal something is wrong with cameras and check them
+            $("#cameraErrors").modal('show');
+          }
+        }, 1000);
+      }
+    });
+  }
+
+  function stopRecording(n, cA, cId) {
+    $("#webcam").width("100%");
+
+    if (ophalenVideo) {
+      cA[cId]["switchtoSDK"] = 1;
+      fetchAndProcess('http://localhost:18080/camera_disconnect_ind', n, "json");
+    }
+    let captureCameras = 0;
+
+    Object.keys(cA).forEach((item) => {
+      cA[item].cameraNumber;
+      captureCameras++;
+    });
+    if (captureCameras == totalCameras) {
+      setTimeout(function () {
+        displaystopRecording();
+        // //should it be smart to add                         mediaRecorder.stop(); here?
+        // mediaRecorder.stop();
+      }, 500);
+    }
+  }
+
+  function opnameCounterAdd() {
+    fetch('fetch_last_capture.php?status=opnameCounter', {
+      method: 'GET',
+    }).then(response => response.json())
+      .then(data => {
+        console.log(opnameCounter);
+          opnameCounter = data.opnameCounter;
+        
+      }).catch(function (error) {
+        console.error('Error:', error);
+      });
+  }
+
+  function displayStartRecording() {
+
+    setTimeout(() => {
+      playPitch("start");
+    }, 500);
+
+    setTimeout(() => {
+      playSound();
+    }, 1000);
+
+    $("#webcam").width("25%");
+    $("#webcam").height("25%");
+    $("#webcam").css("z-index", "1000");
+
+    setTimeout(() => {
+      $("#captureDiv").css("background-color", "red");
+      $("#captureDiv").show();
+        }, 500);
+
+
+  }
+
+  function displaystopRecording() {
+    webcamCaptureActive = 0;
+
+    setTimeout(function() {
+      // $("#videoRow").hide();
+      $("#output_canvas").css("background-color", "");
+      $("#output_canvas").css("z-index", "1");
+      $("#captureDiv").hide();
+      $("#webcam").width("100%");
+      $("#webcam").height("100%");
+      $("#webcam").css("z-index", "1");
+    }, 500);
+
+    if (charucoCheck == 1) {
+
+      $("#CharucoBoardDiv").text("Charuco board calibartion done, wait 5 secs!");
+      setTimeout(function () {
+        $("#selectUsers").modal('show');
+        $("#videoRow").show();
+        $("#CharucoBoardDiv").hide();
+        $("#officeVideo").show();
+    $("#signbankVideo").show();
+
+      }, 5000);
+      charucoCheck = 0;
+    } else {
+      startDisplayingWebcam();
+    }
+
+
+    sendGlosId(glosId, selectedType);
+
+  }
+
+  function startDisplayingVideos(cId) {
+
+
+    $("#videoRow").show();
+
+    if (cId == "D4DA001EACEA") {
+      const filePath = cA[cId]["file"];
+      const pathComponents = filePath.split('/');
+      const videoUrlWithTimestamp = pathComponents[pathComponents.length - 3] + '/' + pathComponents[pathComponents.length - 2] + '/' + pathComponents[pathComponents.length - 1];
+
+      const n = cA[cId].cameraNumber;
+      $("#myVideo1").show();
+      myVideo1 = document.getElementById('myVideo1');
+      myVideo1.src = "http://localhost:8080/openVideo?name=" + videoUrlWithTimestamp;
+      myVideo1.load();
+      myVideo1.addEventListener('loadedmetadata', function () {
+        myVideo1.play();
+      });
+      fetchAndProcess('http://localhost:18080/camera_disconnect_ind', n, "json");
+      cA[cId]["file"] = "";
+      loadedVideos++;
+    }
+    if (cId == "D4DA001EAC65") {
+      const filePath = cA[cId]["file"];
+      const pathComponents = filePath.split('/');
+      const videoUrlWithTimestamp = pathComponents[pathComponents.length - 3] + '/' + pathComponents[pathComponents.length - 2] + '/' + pathComponents[pathComponents.length - 1];
+      const n = cA[cId].cameraNumber;
+      myVideo2 = document.getElementById('myVideo2');
+      $("#myVideo2").show();
+      myVideo2.src = "http://localhost:8080/openVideo?name=" + videoUrlWithTimestamp;
+      myVideo2.load();
+      myVideo2.addEventListener('loadedmetadata', function () {
+        myVideo2.play();
+      });
+      fetchAndProcess('http://localhost:18080/camera_disconnect_ind', n, "json");
+      cA[cId]["file"] = "";
+      loadedVideos++;
+    }
+    if (cId == "D4DA001EAD5C") {
+      const filePath = cA[cId]["file"];
+      const pathComponents = filePath.split('/');
+      const videoUrlWithTimestamp = pathComponents[pathComponents.length - 3] + '/' + pathComponents[pathComponents.length - 2] + '/' + pathComponents[pathComponents.length - 1];
+      const n = cA[cId].cameraNumber;
+      myVideo3 = document.getElementById('myVideo3');
+      $("#myVideo3").show();
+      myVideo3.src = "http://localhost:8080/openVideo?name=" + videoUrlWithTimestamp;
+      myVideo3.load();
+      myVideo3.addEventListener('loadedmetadata', function () {
+        myVideo3.play();
+      });
+      fetchAndProcess('http://localhost:18080/camera_disconnect_ind', n, "json");
+      cA[cId]["file"] = "";
+      loadedVideos++;
+    }
+
+    if (loadedVideos === totalCameras) {
+      const myVideo3 = document.getElementById('myVideo3');
+      const myVideo2 = document.getElementById('myVideo2');
+      const myVideo1 = document.getElementById('myVideo1');
+
+      myVideo1.currentTime = 0;
+      myVideo2.currentTime = 0;
+      myVideo3.currentTime = 0;
+
+      myVideo1.play();
+      myVideo2.play();
+      myVideo3.play();
+      loadedVideos = 0;
+      greenLight = 3;
+
+      myVideo1.addEventListener("ended", function () {
+        myVideo1.currentTime = 0;
+        myVideo2.currentTime = 0;
+        myVideo3.currentTime = 0;
+
+        myVideo1.play();
+        myVideo2.play();
+        myVideo3.play();
+      });
+    }
+  }
+
+  function changeStatus(cA) {
+    let cameraConnected = 0;
+    Object.keys(cA).forEach((item) => {
+      if (cA[item]["connected"] == "connected") {
+        cameraConnected++;
+      } else {
+        cameraConnected--;
+      }
+    });
+  }
+
+  async function checkBatteryMemory() {
+    let showModal = 0;
+    try {
+      const inputArray = await fetchAndProcess("http://localhost:18080/get_Camera_Settings", "json", "json");
+
+      const filteredData = inputArray.filter(item => {
+        const batteryLevel = parseInt(item.battery_level);
+        const slot1RemainingTime = parseInt(item.SLOT1_remaning_time);
+        return batteryLevel < 10 || slot1RemainingTime < 100;
+      });
+
+      const cameraDataArray = filteredData.map(item => {
+        const cameraNumber = item.cameraNumber; //is dit camera nummer? moet naam hebben
+
+      //   const cameraArray = {
+      //   "D4DA001EACEA": "camera1",
+      //   "D4DA001EAC65": "camera2",
+      //   "D4DA001EAD5C": "camera3",
+      //   "D4DA001ECB4B": "camera4",
+      //   "D4DA001EC952": "camera5",
+      // };
+
+
+        const batteryLevel = parseInt(item.battery_level);
+        const memoryValue = parseInt(item.SLOT1_remaning_time);
+
+        if (batteryLevel < 10) {
+          showModal = 1;
+        }
+        if (memoryValue > 50 && memoryValue < 150) {
+          showModal = 1;
+
+          //execute once
+          if (uploadAndFormat == 0) {
+            if (webcamCaptureActive == 0) {
+              uploadAndFormat = 1;
+          statusDownload("multiple");
+                  fetchAndProcess('http://localhost:18080/camera_disconnect', "json");
+                  $("#overtweehonderd").modal('show');
+                  console.log("starting upload and format");
+                      }
+              }
+                
+        }
+
+        return {
+          cameraNumber,
+          value: `Batterij Niveau: ${batteryLevel}% Seconden over: ${memoryValue} bij Camera ${cameraNumber}`,
+        };
+      });
+
+      if (showModal == 1) {
+        myModal2.show();
+
+        const table = document.createElement('table');
+        table.className = 'table table-bordered';
+
+        const thead = document.createElement('thead');
+        const headerRow = document.createElement('tr');
+        const thCameraNumber = document.createElement('th');
+        thCameraNumber.textContent = 'Camera Number';
+        const thValue = document.createElement('th');
+        thValue.textContent = 'Value';
+
+        headerRow.appendChild(thCameraNumber);
+        headerRow.appendChild(thValue);
+        thead.appendChild(headerRow);
+
+        const tbody = document.createElement('tbody');
+
+        cameraDataArray.forEach(item => {
+          const row = document.createElement('tr');
+          const tdCameraNumber = document.createElement('td');
+          tdCameraNumber.textContent = item.cameraNumber;
+          const tdValue = document.createElement('td');
+          tdValue.textContent = item.value;
+
+          row.appendChild(tdCameraNumber);
+          row.appendChild(tdValue);
+          tbody.appendChild(row);
+        });
+
+        table.appendChild(thead);
+        table.appendChild(tbody);
+
+        const container = document.getElementById('tableContainer');
+        container.innerHTML = '';
+        container.appendChild(table);
+
+        setTimeout(checkBatteryMemory, 300000);
+      } else {
+        myModal2.hide();
+        if (startupFormat == 0) {
+          $("#bodyText").text("Klaar");
+        } else {
+          // $("#bodyText").text("Bezig met formatteren...");
+        }
+      }
+    } catch (error) {
+      console.error(error);
+    }
+  }
+
+  async function startCheckSettings() {
+    try {
+      let ignoreReference = 0;
+
+      if (ignoreReference == 0) {
+        const inputArray = await fetchAndProcess("http://localhost:18080/get_Camera_Settings", "json", "json");
+        const differences = [];
+
+        const referenceObject = {
+          "focus_area": "Wide",
+          "focus_mode": "AF_C",
+          "recording_setting": "100M 422 10bit",
+          "shutter_speed": "1/500",
+          "white_balance": "ColorTemp",
+          "fps": "59.94 FPS",
+          "formatFile": "XAVC HS 4K"
+        };
+        const container = document.getElementById('cameraDifferences');
+        const referenceTableBody = document.getElementById('referenceTableBody');
+
+        container.innerHTML = '';
+        referenceTableBody.innerHTML = '';
+
+        for (const property in referenceObject) {
+          const row = document.createElement('tr');
+          const tdProperty = document.createElement('td');
+          const tdValue = document.createElement('td');
+          tdProperty.textContent = property;
+          tdValue.textContent = referenceObject[property];
+          row.appendChild(tdProperty);
+          row.appendChild(tdValue);
+          referenceTableBody.appendChild(row);
+        }
+
+        inputArray.forEach((item, index) => {
+          const cameraData = {};
+          for (const key in item) {
+            if (referenceObject[key]) {
+              if (item[key] !== referenceObject[key]) {
+                cameraData[key] = item[key];
+              }
+            }
+          }
+          if (Object.keys(cameraData).length > 0) {
+            differences.push(cameraData);
+          }
+        });
+
+        differences.forEach((cameraData, index) => {
+          const col = document.createElement('div');
+          col.className = 'col-md-4';
+
+          const heading = document.createElement('h3');
+          heading.textContent = `Camera ${index}`;
+
+          const table = document.createElement('table');
+          table.className = 'table table-bordered';
+
+          const thead = document.createElement('thead');
+          const headerRow = document.createElement('tr');
+          const thProperty = document.createElement('th');
+          thProperty.textContent = 'Property';
+          const thDifference = document.createElement('th');
+          thDifference.textContent = 'Difference';
+
+          headerRow.appendChild(thProperty);
+          headerRow.appendChild(thDifference);
+          thead.appendChild(headerRow);
+
+          const tbody = document.createElement('tbody');
+
+          for (const property in cameraData) {
+            const row = document.createElement('tr');
+            const tdProperty = document.createElement('td');
+            const tdDifference = document.createElement('td');
+            tdProperty.textContent = property;
+            tdDifference.textContent = cameraData[property];
+            row.appendChild(tdProperty);
+            row.appendChild(tdDifference);
+            tbody.appendChild(row);
+          }
+
+          table.appendChild(thead);
+          table.appendChild(tbody);
+
+          col.appendChild(heading);
+          col.appendChild(table);
+
+          container.appendChild(col);
+        });
+
+        if (differences.length === 0) {
+          clearInterval(interval);
+          checkBatteryMemory();
+          myModal.hide();
+        } else {
+          myModal.show();
+        }
+      }
+    } catch (error) {
+      console.error(error);
+    }
+  }
+
+
+
+  
+  async function openCheckSettings() {
+    try {
+      let ignoreReference = 0;
+
+      if (ignoreReference == 0) {
+        const inputArray = await fetchAndProcess("http://localhost:18080/get_Camera_Settings", "json", "json");
+        const differences = [];
+
+        const referenceObject = {
+          "focus_area": "Wide",
+          "focus_mode": "AF_C",
+          "recording_setting": "100M 422 10bit",
+          "shutter_speed": "1/500",
+          "white_balance": "ColorTemp",
+          "fps": "59.94 FPS",
+          "formatFile": "XAVC HS 4K"
+        };
+        const container = document.getElementById('cameraDifferences');
+        const referenceTableBody = document.getElementById('referenceTableBody');
+
+        container.innerHTML = '';
+        referenceTableBody.innerHTML = '';
+
+        for (const property in referenceObject) {
+          const row = document.createElement('tr');
+          const tdProperty = document.createElement('td');
+          const tdValue = document.createElement('td');
+          tdProperty.textContent = property;
+          tdValue.textContent = referenceObject[property];
+          row.appendChild(tdProperty);
+          row.appendChild(tdValue);
+          referenceTableBody.appendChild(row);
+        }
+
+        inputArray.forEach((item, index) => {
+          const cameraData = {};
+          for (const key in item) {
+            if (referenceObject[key]) {
+                cameraData[key] = item[key];
+            }
+          }
+          if (Object.keys(cameraData).length > 0) {
+            differences.push(cameraData);
+          }
+        });
+
+        differences.forEach((cameraData, index) => {
+          const col = document.createElement('div');
+          col.className = 'col-md-4';
+
+          const heading = document.createElement('h3');
+          heading.textContent = `Camera ${index}`;
+
+          const table = document.createElement('table');
+          table.className = 'table table-bordered';
+
+          const thead = document.createElement('thead');
+          const headerRow = document.createElement('tr');
+          const thProperty = document.createElement('th');
+          thProperty.textContent = 'Property';
+          const thDifference = document.createElement('th');
+          thDifference.textContent = 'Difference';
+
+          headerRow.appendChild(thProperty);
+          headerRow.appendChild(thDifference);
+          thead.appendChild(headerRow);
+
+          const tbody = document.createElement('tbody');
+
+          for (const property in cameraData) {
+            const row = document.createElement('tr');
+            const tdProperty = document.createElement('td');
+            const tdDifference = document.createElement('td');
+            tdProperty.textContent = property;
+            tdDifference.textContent = cameraData[property];
+            row.appendChild(tdProperty);
+            row.appendChild(tdDifference);
+            tbody.appendChild(row);
+          }
+
+          table.appendChild(thead);
+          table.appendChild(tbody);
+
+          col.appendChild(heading);
+          col.appendChild(table);
+
+          container.appendChild(col);
+        });
+
+        myModal.show();
+
+      }
+    } catch (error) {
+      console.error(error);
+    }
+  }
+
+
+
+
+  async function camerasReconnectStartup() {
+    const numIterations = 10;
+    camerasReconnectStartupRunning = 1;
+
+    for (let i = 0; i < numIterations; i++) {
+      let cameraSuccess = 0;
+      totalCameras = 0;
+      const checkStatus = await fetchAndProcess('http://localhost:18080/check_status', "", "json");
+      console.log(checkStatus)
+      if (checkStatus) {
+        for (const item of checkStatus) {
+          totalCameras = totalCameras + 1;
+        }
+        for (const item of checkStatus) {
+          if (item.status == true && item.state == 0) {
+            cameraSuccess = cameraSuccess + 1;
+            $("#cameraText").text("Cameras online: " + cameraSuccess);
+          } else if (item.status == "fail_please_use_disconnect") {
+            const disconnect_camera = await fetchAndProcess("http://localhost:18080/connect_camera_remote_ind", item.camera_id, "json");
+            await new Promise(resolve => setTimeout(resolve, 1000));
+
+            if (disconnect_camera[0].status == "disconnect_failed_try_connect") {
+              await fetchAndProcess("http://localhost:18080/connect_camera_remote_ind", item.camera_id, "json");
+              await new Promise(resolve => setTimeout(resolve, 1000));
+            }
+          } else if (!item.status) {
+            await fetchAndProcess("http://localhost:18080/connect_camera_remote_ind", item.camera_id, "json");
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          } else if (item.state == 1 && item.status) {
+            await fetchAndProcess("http://localhost:18080/camera_disconnect_ind", item.camera_id, "json");
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+
+          if (cameraSuccess == totalCameras) {
+            foundSuccess = true;
+          }
+        }
+
+        if (foundSuccess) {
+          $("#cameraText").text("Alle Cameras online: " + cameraSuccess);
+          startupFirstTime = 0;
+
+          if (formatOnce == 1) {
+            fetch('fetch_last_capture.php?format=1', {
+              method: 'GET',
+            }).then(response => response.json())
+              .then(data => {
+                if (data.result) {
+                  if (data.result == 0) {
+                    startupFormat = 0;
+                  } else {
+                    setTimeout(function () {
+                    formatModal();
+
+                  }, 1000);
+                    // myModal3.show();
+                    // formatModal.show();
+                    formatOnce = 0;
+                    $("#bodyText").text("Klaar...");
+                  }
+                }
+              }).catch(function (error) {
+                console.error('Error:', error);
+              });
+          }
+
+         
+
+          interval = setInterval(() => {
+            startCheckSettings();
+          }, 1000);
+
+          break;
+        }
+      }
+    }
+  }
+
+  let fetch_timenow;
+
+
+  // async function fetchAndProcess(url, n, form) {
+  //   //get timenow
+  //    fetch_timenow = new Date().getTime();
+  //   try {
+  //     const finalUrl = url + "?n=" + n;
+  //     const response = await fetch(finalUrl);
+  //     if (form == "json") {
+  //       const data = await response.json();
+  //       return data;
+  //     } else {
+  //       const data = await response.text();
+  //       return data;
+  //     }
+  //   } catch (error) {
+  //     return 0;
+  //   }
+  // }
+  async function fetchWithTimeout(resource, options = {}) {
+    const { timeout = 60000 } = options;
+
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), timeout);
+    const response = await fetch(resource, {
+      ...options,
+      signal: controller.signal
+    });
+    clearTimeout(id);
+    return response;
+  }
+
+  async function fetchAndProcess(url, n, form) {
+  if(debug == 1)
+  {
+    return 1;
+  }
+    fetch_timenow = new Date().getTime();
+    try {
+      const finalUrl = url + "?n=" + n;
+      const response = await fetchWithTimeout(finalUrl, { timeout: 6000000 });
+      if (form == "json") {
+        const data = await response.json();
+        return data;
+      } else {
+        const data = await response.text();
+        return data;
+      }
+    } catch (error) {
+      console.error('Fetch error:', error, url);
+      return 0;
+    }
+  }
+
+
+
+  let videoTop;
+let tekstId;
+function ophalenData(userId, glosId) {
+    $("#selectUsers").modal('hide');
+    thema = $("#selectThemaMenu").val();
+    hideOfficeVideo();
+    qrfound = false;
+    qrTime = new Date().getTime();
+
+    sendStartorStopCapture(123, "test", "start");
+
+    // // //debug 
+    // userId = 1
+    // thema = "GEBARENSTRAND B"
+    // selectedType = "Glos";
+
+
+    userId = parseInt($("#selectUsersMenu").val());
+    // let thema = encodeURIComponent($("#selectThemaMenu").val());
+
+    if (selectedType === 'Glos' || selectedType == "Extern") {
+        fetchGlosData(userId, glosId, thema);
+    } else if (selectedType === 'Zin') {
+        fetchZinnenData(userId, glosId, thema);
+    }
+    else if (selectedType === "nmm" || selectedType === "nmm_oc") {
+        fetchNmmData(userId, glosId, thema);
+    }
+    else if (selectedType === "Tekst")
+    {
+      //we want to get value from selected item of the selectThemaMenu
+      tekstId = $("#selectThemaMenu").val();
+      fetchTekstData(userId, tekstId)
+    }
+    else if (selectedType === "Labels")
+    {
+      //we want to get value from selected item of the selectThemaMenu
+      tekstId = $("#selectThemaMenu").val();
+      fetchLabelData(userId, glosId, tekstId)
+    }
+    else if(selectedType === "Begrip")
+    {
+      fetchBegripData(userId, glosId);
+    }
+}
+
+
+function fetchNmmData(userId, glosId, thema) {
+  qrfound = false;
+  qrTime = new Date().getTime();
+
+  sendStartorStopCapture(glosId, "nmm_start", "start");
+
+if(thema == "ALLES"){
+
+  if(selectedType == "nmm")
+{
+  url = `nmm/fetch_nmm_liteGlos.php`;
+
+}
+else
+{
+  url = `nmm/fetch_oc_liteGlos.php`;
+}
+
+
+  fetch(url)
+        .then(response => response.json())
+        .then(data => {
+
+            console.log(data, userId, glosId, thema);
+            console.log(data.unmatchedGloss);
+            // Handle unmatchedGloss from the JSON response
+            if (data.unmatchedGloss && Array.isArray(data.unmatchedGloss)) {
+                data.unmatchedGloss.forEach(item => {
+                    console.log(item);
+                    if (glosId) {
+                        if (item.id.toString() === glosId.toString()) {
+                            handleItem(item); 
+                        }
+                    } else {
+                        try {
+                            const videoTop = JSON.parse(item.zelfopname) || [];
+                            handleItem(item);
+
+                        } catch {
+                            // If parsing fails or videoTop is not an array
+                            handleItem(item);
+                        }
+                    }
+                });
+            }
+
+            camerasReconnectStartupRunning = 0;
+            countOpnames(data);
+            //we get count from the data
+            $("#nogTeGaan").text(`Al opgenomen: ${data.matchedCount}, Nog te gaan: ${data.unmatchedCount}`);
+        })
+        .catch(error => console.error('Error:', error));
+}
+else
+{
+  url = `nmm/fetch_all.php?thema=${thema}`;
+
+
+  fetch(url)
+    .then(response => response.json())
+    .then(data => {
+        let stopLoop = false;
+
+        console.log(data)
+
+        data.forEach(item => {
+            if (stopLoop) return;
+
+            if (glosId) {
+                if (item.id.toString() === glosId.toString()) {
+                    handleItem(item); 
+                    stopLoop = true;
+                }
+            } else {
+                try {
+                    videoTop = JSON.parse(item.videoTop) || [];
+                    if (!Array.isArray(videoTop)) videoTop = [];
+                } catch {
+                    videoTop = [];
+                }
+            }
+        });
+
+        camerasReconnectStartupRunning = 0;
+        countOpnames(data);
+    })
+    .catch(error => console.error('Error:', error));
+}
+
+
+
+
+}
+
+
+function fetchGlosData(userId, glosId, thema) {
+  qrfound = false;
+  qrTime = new Date().getTime();
+
+  console.log("fetchGlosData", userId, glosId, thema);
+
+  sendStartorStopCapture(glosId, "glos_start", "start");
+
+    if(thema == "ALLES"){
+      url = `fetch_all2.php?limit=10000&offset=0&handle=allGlossesStudio`;
+    }
+    else
+    {
+      url = `fetch_all2.php?limit=2000&offset=0&thema=${thema}&handle=themaFilter&menu=false`;
+    }
+
+
+    console.log(url)
+    fetch(url)
+        .then(response => response.json())
+        .then(data => {
+            let stopLoop = false;
+            console.log(data)
+            data.data.forEach(item => {
+                if (stopLoop) return;
+
+                if (glosId) {
+                    if (item.id.toString() === glosId.toString()) {
+                        handleItem(item); 
+                        stopLoop = true;
+                    }
+                } else {
+                    try {
+                        videoTop = JSON.parse(item.videoTop) || [];
+                        if (!Array.isArray(videoTop)) videoTop = [];
+                    } catch {
+                        videoTop = [];
+                    }
+
+                    if (videoTop.length === 0) {
+                        handleItem(item);
+                        stopLoop = true;
+                        
+                    }
+                }
+            });
+
+            camerasReconnectStartupRunning = 0;
+            countOpnames(data.data);
+        })
+        .catch(error => console.error('Error:', error));
+}
+
+
+function fetchTekstData(userId, tekstId) {
+  qrfound = false;
+  qrTime = new Date().getTime();
+
+  console.log("fetchTekstData", userId, tekstId);
+
+  
+
+
+  fetch("https://signcollect.nl/hh/api.php?action=get_content_ngt_text_extended&id=" + tekstId)
+        .then(response => response.json())
+        .then(data => {
+            let stopLoop = false;
+            console.log(data)
+            handleTekstItem(data); 
+
+            sendStartorStopCapture(
+                  tekstId, 
+                  "show_text", 
+                  { 
+                    text: data.ngt_text,
+                    title: data.url || 'No title'
+                  }
+                );
+            camerasReconnectStartupRunning = 0;
+        })
+        .catch(error => console.error('Error:', error));
+
+        //after 3 seconds timeout
+        // setTimeout(() => {
+        //   sendStartorStopCapture(tekstId, "show_text", "show_text");
+        // }, 3000);
+   
+}
+
+
+
+function fetchLabelData(userId, glosId, thema) {
+  qrfound = false;
+  qrTime = new Date().getTime();
+
+  console.log("fetchGlosData", userId, glosId, thema);
+
+  sendStartorStopCapture(glosId, "glos_start", "start");
+
+
+
+
+    fetch("https://signcollect.nl/fetch_all2.php?limit=1000&label=" + thema)
+      .then(response => response.json())
+      .then(responseData => {
+        let stopLoop = false;
+        console.log(responseData);
+        // adapt the loop to iterate over the "data" property of the returned object
+        responseData.data.forEach(item => {
+          if (stopLoop) return;
+          // process each item here, for example:
+          if (glosId) {
+            if (item.id.toString() === glosId.toString()) {
+              handleItem(item);
+              stopLoop = true;
+            }
+          } else {
+            handleItem(item);
+          }
+        });
+        camerasReconnectStartupRunning = 0;
+        countOpnames(responseData.data);
+      })
+      .catch(error => console.error('Error:', error));
+}
+
+
+function fetchBegripData(userId, glosId) {
+  qrFound = true; // Assuming these globals are relevant
+  qrTime = new Date().getTime();
+
+  // Construct the URL (adjust parameters as needed)
+  let url = `hh/get_begrippen.php?`;
+
+  url += `userId=${encodeURIComponent(userId)}`; // Add userId if needed by the backend
+
+  console.log(`Fetching Begrippen: ${url}`);
+
+  fetch(url)
+      .then(response => response.json())
+      .then(responseData => {
+          if (responseData && responseData.data) {
+              let stopLoop = false; // Assuming similar logic might be needed later for selecting one item
+
+              // Example: Find the first item without videoTop if no specific glosId is provided
+              // This part might need adjustment based on the exact requirement for selecting a single item
+              if (!glosId) { // Assuming glosId parameter might be added later
+                  const firstEmpty = responseData.data.find(item => !item.videoTop || item.videoTop.length === 0);
+                  if (firstEmpty) {
+                      // handleItem(firstEmpty); // Assuming handleItem exists and is relevant
+                  } else {
+                      // Handle case where all items have videoTop
+                      console.log("All begrippen seem to be recorded.");
+                       setTimeout(() => {
+                          console.log("showing modal for begrippen")
+                          $("#selectUsers").modal('show'); // Or appropriate modal
+                      }, 1000);
+                  }
+              } else {
+                  // Logic to find item by glosId if needed
+              }
+
+
+              camerasReconnectStartupRunning = 0; // Assuming this global is relevant
+              countOpnames(responseData.data); // Pass the array of begrippen items
+          } else {
+              console.error('Error: Invalid data structure received from get_begrippen.php');
+          }
+      })
+      .catch(error => console.error('Error fetching begrippen:', error));
+}
+
+function fetchAllGlosses() {
+    fetch(`fetch_all.php?offset=0&handle=allGlosses&limit=99999999999`)
+        .then(response => response.json())
+        .then(data => {
+           
+
+            camerasReconnectStartupRunning = 0;
+            countOpnames(data);
+        })
+        .catch(error => console.error('Error:', error));
+}
+
+function fetchZinnenData(userId, glosId, thema) {
+  qrfound = false;
+  qrTime = new Date().getTime();
+
+  sendStartorStopCapture(glosId, "zin_start", "start");
+
+    if(!thema) {
+        thema = 'undefined';
+    }
+    console.log(`zin/getRows.php?&filterThema=${thema}&userId=${userId}`);
+    fetch(`zin/getRows.php?&filterThema=${thema}&userId=${userId}`)
+        .then(response => response.json())
+        .then(data => {
+            let stopLoop = false;
+
+            data.rows.forEach(item => {
+                if (stopLoop) return;
+
+                if (glosId) {
+                    if (item.ID.toString() === glosId.toString()) {
+                        handleItem(item); 
+                        stopLoop = true;
+                    }
+                } else {
+                    console.log(item.videos, item.videos.length)
+                    if (item.videos.length === 0) {
+                      console.log(item)
+                        handleItem(item);
+                        stopLoop = true;
+                    }
+                    
+                }
+            });
+
+            //is stopLoop still false? then we return
+            if (!stopLoop) {
+              setTimeout(() => {
+                console.log("showing modal2")
+                        $("#selectUsers").modal('show');
+                      }, 1000);            }
+
+
+            camerasReconnectStartupRunning = 0;
+            countOpnames(data.rows);
+        })
+        .catch(error => console.error('Error:', error));
+}
+
+function handleTekstItem(item, id) {
+  $("#themaId").text("Autocue actief");
+  $("#themaId").text("");
+  glosId = id;
+
+
+}
+
+
+function handleItem(item) {
+
+console.log(item)
+
+if(item.zinArray)
+{
+  $("#woordId").text(item.zinArray.join(' '));
+}
+else if (item.type)
+{
+  $("#themaId").text(item.thema);
+  $("#woordId").text(item.glos + " " + item.type);
+}
+else
+{
+  //if gebarenstrand is in item.thema
+if(item.thema.includes("GEBARENSTRAND"))
+{
+  $("#woordId").text(item.entry);
+  $("#themaId").text(item.glos);
+}
+else{
+    $("#themaId").text(item.entry);
+  $("#woordId").text(item.glos);
+}
+
+}
+glosId = item.ID || item.id;
+sendGlosId(glosId, selectedType);
+
+if (selectedType === 'Zin') {
+// Fetch updated data from getRows.php if it's a Zin
+fetch(`zin/getRows.php?id=${glosId}`)
+    .then(response => response.json())
+    .then(data => {
+        const glosArray = data.glosArray;
+        const sortArray = data.sortArray;
+        console.log(glosId, glosArray, sortArray)
+        // updateVideoPlaylist(glosId, glosArray, sortArray);
+        //we are going to disable the video signbank for now
+        $("#signbankVideo").hide();
+        //we are going to make #woordid bigger
+        $("#woordId").css("font-size", "200px");
+        $("#woordId").addClass("font-weight-bold");
+        $("#woordId").addClass("text-primary");
+
+    })
+    .catch(error => console.error('Error fetching zin data:', error));
+} else if (selectedType === 'Glos' || selectedType === 'Labels') {
+// Handle Glos type
+console.log(item)
+if (!item.zelfopname || item.zelfopname === "[]") {
+        zelfopname = `${item.glos}.mp4`;
+    } else {
+        try {
+            zelfopname = JSON.parse(item.zelfopname);
+            if (Array.isArray(zelfopname) && zelfopname.length > 0) {
+                zelfopname = zelfopname[0];
+            } else {
+                zelfopname = `${item.glos}.mp4`;
+            }
+        } catch {
+            zelfopname = `${item.glos}.mp4`;
+        }
+    }
+
+    console.log(zelfopname)
+    $("#signbankVideo").show();
+
+let videoElement = document.getElementById('signbankVideo');
+videoElement.src = `../uploads/${zelfopname}`;
+videoElement.load();
+videoElement.play();
+
+
+}
+else if (selectedType === 'nmm' || selectedType === 'nmm_oc') {
+  if (!item.zelfopname || item.zelfopname === "[]") {
+        zelfopname = `${item.glos}.mp4`;
+    } else if (item.zelfopname) {
+  zelfopname = item.zelfopname;
+  try {
+    let parsed = JSON.parse(zelfopname);
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      zelfopname = parsed[0];
+    }
+  } catch (error) {
+    console.log("Error parsing zelfopname:", error);
+    // Keep zelfopname as the original string in case of error
+  }
+  // You can now use `zelfopname` here
+  console.log(zelfopname);
+}
+
+
+    console.log(zelfopname)
+    $("#signbankVideo").show();
+
+let videoElement = document.getElementById('signbankVideo');
+videoElement.src = `../uploads/${zelfopname}`;
+videoElement.load();
+videoElement.play();
+}
+else if (selectedType === "tekst")
+{
+  $("#signbankVideo").hide();
+}
+
+let prevButton = document.getElementById('prevButton');
+let nextButton = document.getElementById('nextButton');
+
+prevButton.onclick = function() {
+nextCapture(glosId, -1);
+};
+nextButton.onclick = function() {
+nextCapture(glosId, 1);
+};
+}
+
+function updateVideoPlaylist(rowId, glosArray, sortArray) {
+const videoElement = document.getElementById('signbankVideo'); // Updated to use the main video element
+const wordDisplay = document.getElementById('videoPlayingText'); // Display current playing video in this element
+
+if (!sortArray) {
+// Create a default sortArray based on the length of glosArray
+sortArray = Array.from({ length: glosArray.length }, (_, i) => i.toString());
+}
+if (videoElement) {
+videoElement.innerHTML = ''; // Clear existing sources
+
+// Create an array to hold the video sources in the correct order
+const playlist = [];
+let currentIndex = 0;
+
+// Fetch all video URLs first based on the sortArray order
+const fetchPromises = sortArray.map((sortIndex, index) => {
+    const glosIDa = glosArray[sortIndex]; // Map sortArray index to the corresponding glosArray element
+    if (glosIDa) {
+        return fetch(`https://signcollect.nl/zin/getSenses.php?glosid=${glosIDa}`)
+            .then(response => response.json())
+            .then(data => {
+                const videoSource = data[0]?.video;
+                if (videoSource) {
+                    playlist[index] = {
+                        videoSource: videoSource,
+                        word: data[0]?.glos
+                    }; // Place the video in the correct position
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching video for glosID:', error);
+            });
+    }
+});
+
+// Once all videos are fetched, set up the playlist
+Promise.all(fetchPromises).then(() => {
+    const filteredPlaylist = playlist.filter(item => item !== undefined);
+    if (filteredPlaylist.length > 0) {
+        loadVideo(currentIndex);
+
+        videoElement.addEventListener('ended', () => {
+            currentIndex++;
+            if (currentIndex >= filteredPlaylist.length) {
+                currentIndex = 0; // Reset to the first video
+            }
+            loadVideo(currentIndex);
+        });
+    }
+
+    function loadVideo(index) {
+        videoElement.src = filteredPlaylist[index].videoSource;
+        wordDisplay.innerText = `${filteredPlaylist[index].word}`;
+        videoElement.load();
+        videoElement.play(); // Auto play the video
+    }
+});
+}
+}
+
+
+
+function nextCapture(glosId, direction = 1) { // direction = 1 for next, -1 for previous
+    hideOfficeVideo();
+    console.log(glosId);
+    console.log(thema);
+    let blob = null;
+
+    // Empty video src of officeVideo
+    let myVideo1 = document.getElementById('officeVideo');
+    myVideo1.src = "";
+
+    let fetchUrl;
+
+    // Find the next or previous item in nogteopnemenArray
+    nogteopnemenArray.forEach((item, index) => {
+            if (item.id.toString() === glosId.toString()) {
+                currentKeyNumber = index;
+                let nextIndex = index + direction;
+                if (nextIndex >= 0 && nextIndex < nogteopnemenArray.length) {
+                    ophalenData(userId, nogteopnemenArray[nextIndex].id);
+                } else {
+                    $("#selectUsers").modal('show');
+                }
+            }
+        });
+     
+
+
+    //   if(selectedType == "Glos")
+    // {
+    //   fetchUrl = `fetch_all.php?limit=500&offset=0&thema=${thema}&handle=themaFilter`;
+    // }
+    // else if (selectedType == "Zin")
+    // {
+    //   fetchUrl = `zin/getRows.php?filterThema=${thema}&userId=${userId}`;
+    // }
+    // else if (selectedType == "nmm")
+    // {
+    //   fetchUrl = `nmm/fetch_all.php?thema=${thema}`;
+    // }
+
+        // fetch(fetchUrl)
+        //     .then(response => response.json())
+        //     .then(data => {
+        //       if(selectedType == "Glos")
+        //     {
+        //       rows = data;
+        //     }
+        //     else if (selectedType == "Zin")
+        //     {
+        //       rows = data.rows;
+        //     }
+        //     else if (selectedType == "nmm")
+        //     {
+        //       rows = data;
+        //     }
+        //         currentKeyNumber = rows.findIndex(row => (row.ID || row.id).toString() === glosId.toString());
+
+        //         if (currentKeyNumber >= 0) {
+        //             let nextIndex = currentKeyNumber + direction;
+        //             if (nextIndex >= 0 && nextIndex < rows.length) {
+        //                 ophalenData(userId, rows[nextIndex].ID || rows[nextIndex].id);
+        //             } else {
+        //               console.log("showing modal")
+        //                 $("#selectUsers").modal('show');
+        //             }
+        //         }
+        //     })
+        //     .catch(error => console.error('Error:', error));
+    
+}
+
+
+
+
+
+
+
+  let oC = 0;
+  let alopgenomenArray = [];
+  let nogteopnemenArray = [];
+  function countOpnames(data) {
+     alopgenomenArray = [];
+     nogteopnemenArray = [];
+
+    // console.log(data)
+    userId = $("#selectUsersMenu").val();  
+    thema = $("#selectThemaMenu").val();
+    let oC = 0;
+    
+    console.log(selectedType)
+
+    if(selectedType == "Glos" || selectedType == "Extern")
+  {
+    data.forEach(item => {
+                    let videoTop = [];
+
+                    // Parse videoTop safely
+                    try {
+                        videoTop = JSON.parse(item.videoTop) || [];
+                    } catch (e) {
+                        videoTop = item.videoTop || [];
+                    }
+                    console.log("Videotop", videoTop)
+
+                    // Determine if userId is found using Array.some for early exit
+                    const userIdFound = videoTop.some(element => 
+        element && element.userId && element.userId.toString() === userId.toString()
+    );
+    
+    if (userIdFound) {
+        alopgenomenArray.push({ glos: item.glos, id: item.id });
+    } else {
+        nogteopnemenArray.push({ glos: item.glos, id: item.id });
+    }
+    });
+  }
+  else if(selectedType == "Labels")
+  {
+    data.forEach(item => {
+    let videoTop = [];
+    try {
+        videoTop = JSON.parse(item.videoTop) || [];
+    } catch (e) {
+        videoTop = item.videoTop || [];
+    }
+    
+    const userIdFound = videoTop.some(element => 
+        element && element.userId && element.userId.toString() === userId.toString()
+    );
+
+
+    
+    if (userIdFound) {
+        alopgenomenArray.push({ glos: item.glos, id: item.id });
+    } else {
+      //we want to check if videoCenter has at least one item
+      let videoCenter = [];
+      try {
+        videoCenter = JSON.parse(item.videoCenter) || [];
+      } catch (e) {
+        videoCenter = item.videoCenter || [];
+      }
+      //check if videoCenter has at least one item
+      if (videoCenter.length > 0) {
+        alopgenomenArray.push({ glos: item.glos, id: item.id });
+      }
+      else
+      {
+        nogteopnemenArray.push({ glos: item.glos, id: item.id });
+      }
+        
+    }
+});
+  }
+  else if (selectedType == "Zin")
+  {
+    data.forEach(item => {
+  let videoProcessed = false;
+
+  if (item.videos && item.videos.length > 0) {
+    item.videos.forEach(video => {
+      if (video.user === $("#selectUsersMenu").val()
+      ) {
+        //first check if item.ID is already in the alopgenomenArray
+        let found = alopgenomenArray.find(element => element.id === item.ID);
+        if (!found) {
+        alopgenomenArray.push({ glos: item.zinArray, id: item.ID });
+        videoProcessed = true; // Mark as processed
+        }
+      }
+    });
+  }
+
+  // If no video matches the userId, or if no videos are present
+  if (!videoProcessed) {
+    nogteopnemenArray.push({ glos: item.zinArray, id: item.ID });
+  }
+});
+  }
+  else if (selectedType == "nmm" && thema != "ALLES")
+  {
+    data.forEach(item => {
+  let videoProcessed = false;
+
+  if (item.videos && item.videos.length > 0) {
+    item.videos.forEach(video => {
+      if (video.user === $("#selectUsersMenu").val()
+      ) {
+        //first check if item.ID is already in the alopgenomenArray
+        let found = alopgenomenArray.find(element => element.id === item.ID);
+        if (!found) {
+        alopgenomenArray.push({ glos: item.glos + " " + item.type, id: item.id });
+        videoProcessed = true; // Mark as processed
+        }
+      }
+    });
+  }
+
+  // If no video matches the userId, or if no videos are present
+  if (!videoProcessed) {
+    nogteopnemenArray.push({ glos: item.glos + " " + item.type, id: item.id });
+  }
+});
+  }
+  else if (selectedType == "nmm" && thema == "ALLES")
+  {
+    data["unmatchedGloss"].forEach(item => {
+        nogteopnemenArray.push({ glos: item.glos + " " + item.type, id: item.id });
+});
+data["matchedGlosses"].forEach(item => {
+        alopgenomenArray.push({ glos: item.glos + " " + item.type, id: item.id });
+});
+  }
+
+  else if (selectedType == "nmm_oc" && thema == "ALLES")
+  {
+    data["unmatchedGloss"].forEach(item => {
+        nogteopnemenArray.push({ glos: item.glos + " " + item.type, id: item.id });
+});
+data["matchedGlosses"].forEach(item => {
+        alopgenomenArray.push({ glos: item.glos + " " + item.type, id: item.id });
+});
+  }
+  // console.log(nogteopnemenArray, alopgenomenArray)
+
+
+  
+
+   
+
+    $("#nogTeGaan").text("Nog te gaan opnames: " + nogteopnemenArray.length);
+
+    $(".opnameViewModalBody").empty().append(`
+        <div class="container">
+          <div class="row">
+            <div class="col-md-6">
+              <h3>Opnames die nog gemaakt moeten worden</h3>
+              <h2 id="nogTeGaanCount"></h2>
+              <table class="table table-bordered">
+                <thead>
+                  <tr><th>Gloss</th></tr>
+                </thead>
+                <tbody id="nogTeGaanTable"></tbody>
+              </table>
+            </div>
+            <div class="col-md-6">
+              <h3>Opnames die al gemaakt zijn</h3>
+                <h2 id="alOpgenomenCount"></h2>
+              <table class="table table-bordered">
+                <thead>
+                  <tr><th>Gloss</th></tr>
+                </thead>
+                <tbody id="alOpgenomenTable"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+    `);
+
+    const populateTable = (tableId, array) => {
+      array.forEach(item => {
+        //dont add when item.thema starts with _
+             $(tableId).append(`<tr><td><a href="#" onclick="ophalenData(${userId}, ${item.id})">${item.glos}</a></td></tr>`);
+      });
+    };
+
+    populateTable("#nogTeGaanTable", nogteopnemenArray);
+    populateTable("#alOpgenomenTable", alopgenomenArray);
+
+    //count items of nogteopnemenArray and alopgenomenArray
+    let nogteopnemenCount = nogteopnemenArray.length;
+    let alopgenomenCount = alopgenomenArray.length;
+    console.log(nogteopnemenCount, alopgenomenCount)
+    $("#nogTeGaanCount").text(nogteopnemenCount);
+    $("#alOpgenomenCount").text(alopgenomenCount);
+
+
+    if(nogteopnemenCount == 0)
+    {
+      console.log("showing modal3")
+      $("#selectUsers").modal('show');
+
+    }
+  }
+
+  function playPitch(status) {
+    audio.play();
+    sendStartorStopCapture(glosId, selectedType, status)
+  }
+
+  function playSound() {
+    const audio = new Audio('../uploads/' + glosId + '.mp3');
+
+    audio.play();
+  }
+
+  function checkAudioFile(glosId) {
+    const audio = new Audio('../uploads/' + glosId + '.mp3');
+    audio.onerror = function () {
+      $("#errorModal").modal('show');
+    }
+  }
+
+  let ophalenVideoSingleOrMultiple;
+
+  function statusDownload(toggle) {
+    if (toggle == "single") {
+      ophalenVideoSingleOrMultiple = "single";
+    } else if (toggle == "multiple") {
+      ophalenVideoSingleOrMultiple = "multiple";
+    } else {
+      return ophalenVideoSingleOrMultiple;
+    }
+  }
+
+  document.addEventListener('keydown', function (event) {
+    if (event.key === 'o') {
+      userId = $("#selectUsersMenu").val();
+
+      const cameraArray = {
+        "D4DA001EACEA": "camera1",
+        "D4DA001EAC65": "camera2",
+        "D4DA001EAD5C": "camera3",
+        "D4DA001ECB4B": "camera4",
+        "D4DA001EC952": "camera5",
+      };
+
+      videoNumber = videoNumber++;
+      var formData = new FormData();
+
+      Object.entries(cA).forEach(([key, value], index) => {
+        const cameraName = cameraArray[key];
+        if (cameraName) {
+          formData.append(cameraName, value["aantal_opnames"]);
+        }
+      });
+      let formId;
+      //if glosid is undefined then try to use tekstId on formId
+      if (glosId == undefined) {
+        formId = tekstId;
+      } else {
+        formId = glosId;
+      }
+
+      formData.append("glos", glos);
+      formData.append("startTime", 0);
+      formData.append("stopTime", 0);
+      formData.append("videoNumber", 0);
+      formData.append("userid", userId);
+      formData.append("skipped", "true");
+      formData.append("id", formId);
+      formData.append("video", "");
+      formData.append("stateVideo", "skipped");
+      formData.append("zOg", selectedType)
+      var object = {};
+      formData.forEach((value, key) => object[key] = value);
+
+      var formDataJSON = JSON.stringify(object);
+
+      console.log(formDataJSON);
+
+      fetch('save_video_studio.php?formdata=' + formData, {
+        method: 'POST',
+        body: formData,
+      }).then(response => response.json())
+        .then(data => {
+          if (data.success) {
+            ophalenData(userId);
+          }
+        }).catch(function (error) {
+          console.error('Error:', error);
+        });
+    }
+  });
+
+
+  let bezigStoppen = new bootstrap.Modal(document.getElementById('bezigStoppen'), {
+  });
+
+  var webcamCaptureActive = 0;
+
+let lastKeyPressTime = 0;
+
+let currentTime;
+
+
+
+function startDownloadConfirm(){
+  statusDownload("multiple");
+  fetchAndProcess('http://localhost:18080/camera_disconnect', "json");
+}
+
+
+
+
+  document.addEventListener('keydown', function (event) {
+    if (event.key === 'q') {
+      const downloadConfirmModal = new bootstrap.Modal(document.getElementById('downloadConfirmModal'), {
+  });
+  downloadConfirmModal.show();
+    }
+    if (event.key === 'c') {
+      //here we enable the timer and move the timer slider with +1
+
+      //when the value is under 10 seconds, we add 1 second
+      //when the value is more than 10 seconds, then we reset the value back to 1 second
+      if (parseInt(document.getElementById('timerSlider').value) < 10) {
+        document.getElementById('timerSlider').value = parseInt(document.getElementById('timerSlider').value) + 1;
+        //also change the text of the timer slider
+        document.getElementById('timeValue').innerText = document.getElementById('timerSlider').value + " sec";
+      } else {
+        document.getElementById('timerSlider').value = 1;
+        //also change the text of the timer slider
+        document.getElementById('timeValue').innerText = document.getElementById('timerSlider').value + " sec";
+      }
+    }
+
+    if (event.key === 'a') {
+      if (webcamCaptureActive == 0) {
+        nextCapture(glosId, 1);
+        //reset the timer to 3 secs
+        document.getElementById('timerSlider').value = 5;
+        document.getElementById('timeValue').innerText = document.getElementById('timerSlider').value + " sec";
+      }
+    }
+
+    if (event.key === 'b') {
+    currentTime = new Date().getTime();
+    console.log("pressed");
+
+    const enableTimer = document.getElementById('enableTimerCheckbox').checked;
+    const timerDelay = parseInt(document.getElementById('timerSlider').value) * 1000;
+
+    if (webcamCaptureActive == 0) {
+        let glos = document.getElementById("woordId").textContent;
+
+        if (enableTimer) {
+            console.log(timerDelay)
+
+            // Show countdown overlay before starting capture
+            const countdownOverlay = document.getElementById('countdownOverlay');
+            countdownOverlay.style.display = 'flex';
+            let countdownValue = 2; // Countdown time in seconds
+            countdownOverlay.innerText = countdownValue;
+
+            // Countdown Timer
+            const countdownInterval = setInterval(() => {
+                countdownValue -= 1;
+                if (countdownValue > 0) {
+                    countdownOverlay.innerText = countdownValue;
+                } else {
+                    clearInterval(countdownInterval);
+                    countdownOverlay.style.display = 'none'; // Hide the overlay
+
+                    // Start capturing after countdown finishes
+                    startWebcamCapture(glos);
+                    webcamCaptureActive = 1;
+                    lastKeyPressTime = currentTime;
+
+                    // Stop capture automatically after 3 seconds
+                    setTimeout(() => {
+                        playPitch("stop");
+                        
+                        mediaRecorder.stop();
+                        webcamCaptureActive = 0;  // Reset to allow for the next capture
+                    }, timerDelay);
+                }
+            }, 1000);
+        } else {
+            // Start capturing immediately
+            startWebcamCapture(glos);
+            webcamCaptureActive = 1;
+            lastKeyPressTime = currentTime;
+
+              }
+
+    } else {
+        if (new Date().getTime() - lastKeyPressTime < 2000) {
+            bezigStoppen.show();
+        }
+        let intervalId = setInterval(function () {
+            if (new Date().getTime() - lastKeyPressTime > 3000) {
+                playPitch("stop");
+                mediaRecorder.stop();
+                bezigStoppen.hide();
+                clearInterval(intervalId);
+                webcamCaptureActive = 0;  // Reset to allow for the next capture
+            }
+        }, 100);
+    }
+}
+
+
+    // if (event.key === 'd') {
+    //   statusDownload("single");
+
+    //   if (ophalenVideo) {
+    //     ophalenVideo = false;
+    //     $("#videoDownload").hide();
+    //   } else {
+    //     ophalenVideo = true;
+    //     $("#videoDownload").show();
+    //   }
+    // }
+
+  });
+
+
+
+
+
+
+  socketExt.onmessage = function (event) {
+    const data = JSON.parse(event.data);
+    if (data.action === 'capturing') {
+      document.body.className = 'green';
+    } else if (data.action === 'stopping') {
+      document.body.className = 'white';
+    }
+  };
+
+  socketExt.onerror = function (error) {
+    console.error('WebSocket error: ', error);
+  };
+
+  socketExt.onclose = function () {};
+
+  socketExt.onopen = function () {
+    socketExt.send(JSON.stringify({ action: 'register', type: 'controller' }));
+  };
+
+  function startWebcamCapture(glos) {
+    const options = {
+      audioBitsPerSecond: 128000,
+      videoBitsPerSecond: 2500000,
+      mimeType: "video/webm",
+      audio: true,
+    };
+
+    mediaRecorder = new MediaRecorder(webcamElement.srcObject, options);
+
+    mediaRecorder.ondataavailable = function (event) {
+      chunks.push(event.data);
+    };
+
+    mediaRecorder.onstop = function () {
+      stopRecord();
+      blob = new Blob(chunks, { type: "video/webm" });
+      userId = $("#selectUsersMenu").val();
+
+      const cameraArray = {
+        "D4DA001EACEA": "camera1",
+        "D4DA001EAC65": "camera2",
+        "D4DA001EAD5C": "camera3",
+        "D4DA001ECB4B": "camera4",
+        "D4DA001EC952": "camera5",
+      };
+
+      videoNumber = videoNumber++;
+      var formData = new FormData();
+
+      Object.entries(cA).forEach(([key, value], index) => {
+        const cameraName = cameraArray[key];
+        if (cameraName) {
+          formData.append(cameraName, value["aantal_opnames"]);
+        }
+      });
+
+      let formId;
+
+      if (glosId == undefined) {
+        formId = tekstId;
+      } else {
+        formId = glosId;
+      }
+
+
+      stopTime = new Date().toISOString();
+      formData.append("glos", glos);
+      formData.append("startTime", startTime);
+      formData.append("stopTime", stopTime);
+      formData.append("videoNumber", videoNumber);
+      formData.append("userid", userId);
+      formData.append("video", blob);
+      formData.append("id", formId);
+      formData.append("stateVideo", "stopped");
+      formData.append("zOg", selectedType)
+      //output formData values for console.log
+      var object = {};
+      formData.forEach((value, key) => object[key] = value);
+      console.log(object);
+
+
+      fetch('save_video_studio.php?formdata=' + JSON.stringify(Object.fromEntries(formData)), {
+        method: 'POST',
+        body: formData,
+      }).then(response => response.json())
+      .then(text => {
+        console.log(text);
+      })
+        .then(data => {
+          if (data.success) {
+
+
+            fetch('fetch_last_capture.php?status=opnameCounter', {
+              method: 'GET',
+            })
+              .then(response => response.json())
+              .then(data => {
+                let tempOpnameCounter = data.opnameCounter;
+
+         
+
+
+              })
+              .catch(error => {
+                console.error('Error:', error);
+              });
+
+
+          } else {
+          }
+        }).catch(function (error) {
+          console.error('Error:', error);
+        });
+
+      if (charucoCheck == 1) {
+        $("#videoRow").show();
+
+        $("#CharucoBoardDiv").html("Charuco board calibratie gereed!");
+        setTimeout(function () {
+          $("#selectUsers").modal('show');
+        }, 5000);
+      } else {
+        $("#CharucoBoardDiv").hide();
+
+        startDisplayingWebcam(blob);
+      }
+
+      chunks = [];
+    };
+
+    startTime = new Date().toISOString();
+    startRecord();
+  }
+
+  function startDisplayingWebcam(blob) {
+
+    console.log("sadasdasda")
+    $("#videoRow").show();
+
+    showOfficeVideo();
+
+
+    myVideo1 = document.getElementById('officeVideo');
+
+
+
+
+    if (blob) {
+      myVideo1.src = URL.createObjectURL(blob);
+      myVideo1.load();
+      myVideo1.addEventListener('loadedmetadata', function () {
+        myVideo1.play();
+      });
+    }
+  }
+
+  fetch('fetch_data.php', {
+    method: 'GET',
+  }).then(response => response.json())
+    .then(data => {
+      if (data) {
+        data.forEach(item => {
+          var option = document.createElement("option");
+          option.text = item.user;
+          option.value = item.userid;
+          document.getElementById("selectUsersMenu").add(option);
+        });
+      }
+    }).catch(function (error) {
+      console.error('Error:', error);
+    });
+
+
+
+  var ws;
+
+  function connect() {
+    ws = new WebSocket('wss://signcollect.nl/studioSupport/');
+
+    ws.onopen = () => {
+      console.log('Connected to server.');
+
+      ws.send(JSON.stringify({ glosId: '9999', selectedType: 'none', status: 'hello' }));
+    };
+
+    ws.onerror = (error) => {
+      console.error('WebSocket error:', error);
+    };
+
+    ws.onclose = () => {
+      console.log('Disconnected from server. Attempting to reconnect...');
+      setTimeout(connect, 1000);
+    };
+  ws.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    console.log(data.callback)
+    if (data.callback === 'callback') {
+      //we are going to hide modal window that consist of message: waiting for qR desktop
+      setTimeout(() => {
+        $("#qrDesktopModal").modal('hide');
+      }, 1000);
+
+    } 
+  };
+  }
+
+  function sendGlosId(glosId, selectedType) {
+  if (glosId && selectedType) {
+    const message = JSON.stringify({ glosId: glosId, selectedType: selectedType });
+    ws.send(message);
+  } 
+}
+
+function sendStartorStopCapture(glosId, selectedType, status) {
+  console.log(glosId, status, selectedType)
+    const message = JSON.stringify({ glosId: glosId, selectedType: selectedType, status: status });
+    ws.send(message);
+  
+}
+
+function listFiles() {
+  const jsonFile = `https://signcollect.nl/listfiles.json?t=${Date.now()}`;
+  fetch(jsonFile)
+    .then(response => response.json())
+    .then(data => {
+      console.log(data);
+      const table = document.getElementById('listFiles');
+      
+      // Clear existing content
+      table.innerHTML = '';
+      
+      // Add header row
+      const headerRow = table.insertRow(0);
+      ['Date', 'Left', 'Mid', 'Right', 'A', 'B', 'Status'].forEach(header => {
+        const th = document.createElement('th');
+        th.textContent = header;
+        headerRow.appendChild(th);
+      });
+      
+      // Process up to first 3 folders
+      const foldersToProcess = data.folders.slice(-5);
+      
+      foldersToProcess.forEach(folder => {
+        const row = table.insertRow();
+        
+        // Add date cell
+        const dateCell = row.insertCell();
+        dateCell.textContent = folder.date;
+        
+        // Add file count cells (L, M, R, A, B)
+        ['L', 'M', 'R', 'A', 'B'].forEach(key => {
+          const cell = row.insertCell();
+          cell.textContent = folder.files[key];
+        });
+        
+        // Add status cell
+        const statusCell = row.insertCell();
+        
+        // Apply styling based on is_ok field
+        if (folder.is_ok) {
+          row.style.backgroundColor = 'green';
+          statusCell.textContent = 'OK';
+        } else {
+          row.style.backgroundColor = 'red';
+          statusCell.textContent = 'DONT FORMAT, REUPLOAD AGAIN';
+        }
+      });
+    })
+    .catch(error => console.error('Error fetching data:', error));
+}
+
+
+// Maximum number of video streams to display
+const MAX_VIDEOS = 6;
+
+// Array to hold active media streams
+let activeStreams = [];
+
+// Function to determine Bootstrap column class based on number of videos per row
+function getBootstrapColClass() {
+      // Since each row has max 3 videos, each column should take up 4 units (12/3)
+      return 'col-lg-2'; // Adjusted for better responsiveness
+    }
+
+    // Function to initialize webcam streams
+    async function initWebcamStreams() {
+      const videoRow1 = document.getElementById('videoRow1');
+      const videoRow2 = document.getElementById('videoRow2');
+
+      try {
+        // Request access to any webcam to get permissions and device labels
+        await navigator.mediaDevices.getUserMedia({ video: true });
+
+        // Enumerate all media devices
+        const devices = await navigator.mediaDevices.enumerateDevices();
+
+        // Filter for video input devices
+        const videoDevices = devices.filter(device => device.kind === 'videoinput');
+
+
+
+        // Limit to MAX_VIDEOS
+        const devicesToShow = videoDevices.slice(0, MAX_VIDEOS);
+        const totalVideos = devicesToShow.length;
+
+        // Iterate over each video device and create video elements
+        devicesToShow.forEach((device, index) => {
+          // Determine which row to place the video in
+          const isFirstRow = index < 6;
+          const targetRow = isFirstRow ? videoRow1 : videoRow2;
+
+          // Create column div
+          const colDiv = document.createElement('div');
+          colDiv.className = getBootstrapColClass();
+
+          // Create ratio div using Bootstrap's ratio classes
+          const ratioDiv = document.createElement('div');
+          ratioDiv.className = 'ratio ratio-16x9 w-100';
+
+          // Create video element
+          const video = document.createElement('video');
+          video.autoplay = true;
+          video.muted = true; // Mute to allow autoplay without user interaction
+          video.playsInline = true;
+          video.controls = false; // Hide controls for a cleaner look
+          video.className = 'video rotated-video'; // Added 'rotated-video' class
+
+          // Append video to ratio div
+          ratioDiv.appendChild(video);
+
+          // Create camera name element
+          const cameraName = document.createElement('div');
+          cameraName.className = 'camera-name';
+          cameraName.textContent = device.label || `Camera ${index + 1}`;
+
+          // Append ratio div and camera name to column
+          colDiv.appendChild(ratioDiv);
+          colDiv.appendChild(cameraName);
+          targetRow.appendChild(colDiv);
+
+          // Define constraints with specific deviceId
+          const constraints = {
+            video: {
+              deviceId: { exact: device.deviceId }
+            }
+          };
+
+          // Get and set the stream for the video element
+          navigator.mediaDevices.getUserMedia(constraints)
+            .then(stream => {
+              video.srcObject = stream;
+              activeStreams.push(stream); // Keep track of active streams
+            })
+            .catch(err => {
+              console.error(`Error accessing ${device.label}:`, err);
+            });
+        });
+
+      } catch (err) {
+        console.error('Error accessing media devices:', err);
+      }
+    }
+
+    // Function to stop all active streams
+    function stopAllStreams() {
+      activeStreams.forEach(stream => {
+        stream.getTracks().forEach(track => track.stop());
+      });
+      activeStreams = []; // Clear the active streams array
+
+      // Clear video elements
+      const videoElements = document.querySelectorAll('#webcamModal video');
+      videoElements.forEach(video => {
+        video.srcObject = null;
+      });
+
+      // Clear video rows
+      document.getElementById('videoRow1').innerHTML = '';
+      document.getElementById('videoRow2').innerHTML = '';
+    }
+
+// Initialize webcam streams when modal is shown
+const webcamModal = document.getElementById('webcamModal');
+webcamModal.addEventListener('show.bs.modal', initWebcamStreams);
+
+// Stop streams and clear videos when modal is hidden
+webcamModal.addEventListener('hidden.bs.modal', stopAllStreams);
+  connect();
+
+//open webcam modal
+function openWebcamModal() {
+  const webcamModal = new bootstrap.Modal(document.getElementById('webcamModal'), {
+  });
+  webcamModal.show();
+}
+if(!debug)
+{
+  openWebcamModal();
+}
+
+</script>
+
+</html>

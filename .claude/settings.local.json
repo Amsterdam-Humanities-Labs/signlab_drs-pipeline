@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find:*)",
+      "Bash(python -m pytest test_startupScript.py -v)",
+      "Bash(python3 -m pytest test_startupScript.py -v)",
+      "Bash(python3:*)",
+      "Bash(rm:*)",
+      "Bash(python -m pytest --version)",
+      "Bash(chmod:*)",
+      "Bash(rg:*)",
+      "Bash(/usr/bin/python3 -m unittest:*)",
+      "Bash(crontab:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
+    ],
+    "deny": []
+  }
+}

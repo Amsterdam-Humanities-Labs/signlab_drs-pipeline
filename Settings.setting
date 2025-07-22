@@ -1,0 +1,343 @@
+{
+	Tools = ordered() {
+		MediaIn1 = MediaIn {
+			ExtentSet = true,
+			CustomData = {
+				Path = {
+					Map = {
+						["Setting:"] = "/Users/gomerotterspeer/Desktop/"
+					}
+				},
+				MediaProps = {
+					MEDIA_AUDIO_TRACKS_DESC = {
+						{
+							MEDIA_AUDIO_BIT_DEPTH = 32,
+							MEDIA_AUDIO_FRAME_RATE = 59.9401,
+							MEDIA_AUDIO_NUM_CHANNELS = 2,
+							MEDIA_AUDIO_SAMPLE_RATE = 48000,
+							MEDIA_AUDIO_START_TIME = 0,
+							MEDIA_AUDIO_TRACK_ID = "929a47d0-e48e-4b18-8c31-dd9f058faee5",
+							MEDIA_AUDIO_TRACK_NAME = "R20250325_0147.MP4"
+						},
+						{
+							MEDIA_AUDIO_BIT_DEPTH = 32,
+							MEDIA_AUDIO_FRAME_RATE = 59.9401,
+							MEDIA_AUDIO_NUM_CHANNELS = 2,
+							MEDIA_AUDIO_SAMPLE_RATE = 48000,
+							MEDIA_AUDIO_START_TIME = 0,
+							MEDIA_AUDIO_TRACK_ID = "Timeline Audio",
+							MEDIA_AUDIO_TRACK_NAME = "Timeline Audio [New Timeline]"
+						}
+					},
+					MEDIA_AUDIO_TRACKS_NUM = 2,
+					MEDIA_FORMAT_TYPE = "QuickTime",
+					MEDIA_HAS_AUDIO = true,
+					MEDIA_HEIGHT = 3840,
+					MEDIA_IS_SOURCE_RES = true,
+					MEDIA_MARK_IN = 0,
+					MEDIA_MARK_OUT = 539,
+					MEDIA_NAME = "R20250325_0147.MP4",
+					MEDIA_NUM_FRAMES = 540,
+					MEDIA_NUM_LAYERS = 1,
+					MEDIA_PAR = 1,
+					MEDIA_PATH = "/Users/gomerotterspeer/drs/import/R20250325_0147.MP4",
+					MEDIA_SRC_FRAME_RATE = 59.9401,
+					MEDIA_START_FRAME = 0,
+					MEDIA_WIDTH = 2160
+				},
+			},
+			Inputs = {
+				GlobalOut = Input { Value = 539, },
+				AudioTrack = Input { Value = FuID { "Timeline Audio" }, },
+				Layer = Input { Value = "0", },
+				ClipTimeEnd = Input { Value = 539, },
+				["Gamut.SLogVersion"] = Input { Value = FuID { "SLog2" }, },
+				LeftAudio = Input {
+					SourceOp = "Left",
+					Source = "Data",
+				},
+				RightAudio = Input {
+					SourceOp = "Right",
+					Source = "Data",
+				}
+			},
+			ViewInfo = OperatorInfo { Pos = { 55, 16.5 } },
+			Version = 1
+		},
+		Left = AudioDisplay {
+			CtrlWZoom = false,
+		},
+		Right = AudioDisplay {
+			CtrlWZoom = false,
+		},
+		ColorCorrector1 = ColorCorrector {
+			CustomData = {
+				Path = {
+					Map = {
+						["Setting:"] = "/Users/pieter/Documents/_Fusion Settings voor ZinInNGT/"
+					}
+				}
+			},
+			Inputs = {
+				MasterRGBGain = Input { Value = 1.13, },
+				ColorRanges = Input {
+					Value = ColorCurves {
+						Curves = {
+							{
+								Points = {
+									{ 0, 1 },
+									{ 0.4, 0.2 },
+									{ 0.6, 0 },
+									{ 1, 0 }
+								}
+							},
+							{
+								Points = {
+									{ 0, 0 },
+									{ 0.4, 0 },
+									{ 0.6, 0.2 },
+									{ 1, 1 }
+								}
+							}
+						}
+					},
+				},
+				HistogramIgnoreTransparent = Input { Value = 1, },
+				Input = Input {
+					SourceOp = "Crop1",
+					Source = "Output",
+				}
+			},
+			ViewInfo = OperatorInfo { Pos = { 327.667, 52.8182 } },
+		},
+		Merge1 = Merge {
+			CustomData = {
+				Path = {
+					Map = {
+						["Setting:"] = "/Users/pieter/Documents/_Fusion Settings voor ZinInNGT/"
+					}
+				}
+			},
+			Inputs = {
+				Background = Input {
+					SourceOp = "Background1",
+					Source = "Output",
+				},
+				Foreground = Input {
+					SourceOp = "Resize2",
+					Source = "Output",
+				},
+				PerformDepthMerge = Input { Value = 0, }
+			},
+			ViewInfo = OperatorInfo { Pos = { 685.667, 52.2121 } },
+		},
+		Grid1 = ofx.com.blackmagicdesign.resolvefx.Grid {
+			PassThrough = true,
+			CustomData = {
+				Path = {
+					Map = {
+						["Setting:"] = "/Users/pieter/Documents/_Fusion Settings voor ZinInNGT/"
+					}
+				},
+			},
+			Inputs = {
+				Source = Input {
+					SourceOp = "Merge1",
+					Source = "Output",
+				},
+				vernum = Input { Value = 4, },
+				hornum = Input { Value = 2, },
+				majorspace = Input { Value = 4, },
+				lineprop = Input { Value = 1, },
+				linecolorRed = Input { Value = 1, },
+				linecolorGreen = Input { Value = 1, },
+				linecolorBlue = Input { Value = 1, },
+				horwidth = Input { Value = 0.0500000007450581, },
+				verwidth = Input { Value = 0.0500000007450581, },
+				majorwidth = Input { Value = 2.5, },
+				tranform = Input { Value = 1, },
+				pan = Input { Value = 0, },
+				tilt = Input { Value = 0, },
+				zoom = Input { Value = 1, },
+				rotate = Input { Value = 0, },
+				gridwidth = Input { Value = 1, },
+				gridheight = Input { Value = 1, },
+				ShearX = Input { Value = 0, },
+				ShearY = Input { Value = 0, },
+				pitch = Input { Value = 0, },
+				yaw = Input { Value = 0, },
+				blendGroup = Input { Value = 0, },
+				blendIn = Input { Value = 1, },
+				blend = Input { Value = 0, },
+				ignoreContentShape = Input { Value = 0, },
+				legacyIsProcessRGBOnly = Input { Value = 0, },
+				IsNoTemporalFramesReqd = Input { Value = 0, },
+				refreshTrigger = Input { Value = 1, },
+				srcProcessingAlphaMode = Input { Value = -1, },
+				dstProcessingAlphaMode = Input { Value = -1, },
+				resolvefxVersion = Input { Value = "1.0", }
+			},
+			ViewInfo = OperatorInfo { Pos = { 816, 52.2121 } },
+		},
+		Crop1 = Crop {
+			CustomData = {
+				Path = {
+					Map = {
+						["Setting:"] = "/Users/pieter/Documents/_Fusion Settings voor ZinInNGT/"
+					}
+				},
+			},
+			Inputs = {
+				XOffset = Input { Value = 30, },
+				YOffset = Input { Value = 54, },
+				XSize = Input { Value = 2100, },
+				YSize = Input { Value = 3733, },
+				KeepAspect = Input { Value = 1, },
+				KeepCentered = Input { Value = 1, },
+				Input = Input {
+					SourceOp = "MediaIn1",
+					Source = "Output",
+				}
+			},
+			ViewInfo = OperatorInfo { Pos = { 190.667, 52.2121 } },
+		},
+		DeltaKeyer1 = DeltaKeyer {
+			CtrlWZoom = false,
+			CustomData = {
+				Path = {
+					Map = {
+						["Setting:"] = "/Users/pieter/Documents/_Fusion Settings voor ZinInNGT/"
+					}
+				},
+			},
+			Inputs = {
+				Gain = Input { Value = 1.071, },
+				TuningRanges = Input {
+					Value = ColorCurves {
+						Curves = {
+							{
+								Points = {
+									{ 0, 1 },
+									{ 0.4, 0.2 },
+									{ 0.6, 0 },
+									{ 1, 0 }
+								}
+							},
+							{
+								Points = {
+									{ 0, 0 },
+									{ 0.4, 0 },
+									{ 0.6, 0.2 },
+									{ 1, 1 }
+								}
+							}
+						}
+					},
+				},
+				Clean = Input {
+					SourceOp = "CleanPlate1",
+					Source = "Output",
+				},
+				Input = Input {
+					SourceOp = "ColorCorrector1",
+					Source = "Output",
+				}
+			},
+			ViewInfo = OperatorInfo { Pos = { 465.667, 52.2121 } },
+		},
+		Resize2 = BetterResize {
+			CustomData = {
+				Path = {
+					Map = {
+						["Setting:"] = "/Users/pieter/Documents/_Fusion Settings voor ZinInNGT/"
+					}
+				},
+			},
+			Inputs = {
+				Width = Input { Value = 2160, },
+				Height = Input { Value = 3840, },
+				UseFrameFormatSettings = Input { Value = 1, },
+				KeepAspect = Input { Value = 1, },
+				HiQOnly = Input { Value = 0, },
+				PixelAspect = Input { Value = { 1, 1 }, },
+				Input = Input {
+					SourceOp = "DeltaKeyer1",
+					Source = "Output",
+				}
+			},
+			ViewInfo = OperatorInfo { Pos = { 575.667, 52.2121 } },
+		},
+		MediaOut1 = MediaOut {
+			CustomData = {
+				Path = {
+					Map = {
+						["Setting:"] = "/Users/pieter/Documents/_Fusion Settings voor ZinInNGT/"
+					}
+				},
+			},
+			Inputs = {
+				Index = Input { Value = "0", },
+				Input = Input {
+					SourceOp = "Grid1",
+					Source = "Output",
+				}
+			},
+			ViewInfo = OperatorInfo { Pos = { 946.997, 54.6363 } },
+		},
+		Background1 = Background {
+			CustomData = {
+				Path = {
+					Map = {
+						["Setting:"] = "/Users/pieter/Documents/_Fusion Settings voor ZinInNGT/"
+					}
+				},
+			},
+			Inputs = {
+				GlobalOut = Input { Value = 539, },
+				Width = Input { Value = 2160, },
+				Height = Input { Value = 3840, },
+				UseFrameFormatSettings = Input { Value = 1, },
+				["Gamut.SLogVersion"] = Input { Value = FuID { "SLog2" }, },
+				TopLeftRed = Input { Value = 0.176470588235294, },
+				TopLeftGreen = Input { Value = 0.423529411764706, },
+				TopLeftBlue = Input { Value = 0.662745098039216, },
+				Start = Input { Value = { 0.5, 0 }, },
+				End = Input { Value = { 0.5, 1 }, },
+				Gradient = Input {
+					Value = Gradient {
+						Colors = {
+							[0] = { 0, 0.305882352941176, 0.376470588235294, 1 },
+							[1] = { 0, 0.521568627451, 0.6392156862745, 1 }
+						}
+					},
+				}
+			},
+			ViewInfo = OperatorInfo { Pos = { 685.667, 151.212 } },
+		},
+		CleanPlate1 = CleanPLate {
+			CustomData = {
+				Path = {
+					Map = {
+						["Setting:"] = "/Users/pieter/Documents/_Fusion Settings voor ZinInNGT/"
+					}
+				}
+			},
+			Inputs = {
+				BackgroundRed = Input { Value = 0.350436389446259, },
+				BackgroundGreen = Input { Value = 0.86968070268631, },
+				BackgroundBlue = Input { Value = 0.455870896577835, },
+				Erode = Input { Value = 0.01909, },
+				GrowEdges = Input { Value = 0.0772, },
+				InsideFill = Input { Value = 1, },
+				TimeMode = Input { Value = 1, },
+				HoldTime = Input { Value = 87, },
+				Input = Input {
+					SourceOp = "ColorCorrector1",
+					Source = "Output",
+				}
+			},
+			ViewInfo = OperatorInfo { Pos = { 465.667, 151.212 } },
+		}
+	},
+	ActiveTool = "DeltaKeyer1"
+}

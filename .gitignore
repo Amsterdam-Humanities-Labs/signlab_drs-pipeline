@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+
+# Logs
+logs/
+*.log
+startup.pid
+
+# Media files
+*.mp4
+*.MP4
+*.mkv
+*.jpg
+*.jpeg
+*.png
+*.mov
+*.avi
+
+# Temporary files
+temp/
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
+
+# Node
+node_modules/
+
+# Build directories
+build/
+dist/
+*.egg-info/
+
+# Project specific
+export/
+import/
+qr/
+debug_*.jpg
+first_frame*.jpg
+processed_image.jpg
+videoframe_*.png
+vlcsnap-*.png
+yolo_debug_image.jpg
+firststep_debug_image.jpg

@@ -1,0 +1,5 @@
+{
+  "interval": 60,
+  "movement_range": 50,
+  "movement_duration": 0.1
+}
