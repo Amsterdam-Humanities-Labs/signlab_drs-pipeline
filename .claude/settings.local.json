@@ -34,7 +34,11 @@
       "Bash(node signcollect_monitor.js:*)",
       "Bash(python:*)",
       "Bash(screen:*)",
-      "WebFetch(domain:api.signcollect.nl)"
+      "WebFetch(domain:api.signcollect.nl)",
+      "Bash(git push:*)",
+      "Bash(gh auth status:*)",
+      "Bash(git remote set-url:*)",
+      "Bash(zip:*)"
     ],
     "deny": []
   }
