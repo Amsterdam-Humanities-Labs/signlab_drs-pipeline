@@ -484,7 +484,8 @@ server.post('/fileDownloaded', (req, res) => {
   const dataToSend = {
     "cameraId": cameraId,
     "handle": "fileDownloaded",
-    "file": fileData
+    "file": fileData,
+    "timestamp": new Date().toISOString()
   };
 
   notifyWebSocketClients(dataToSend);
@@ -611,7 +612,8 @@ server.post('/completedMultiple', (req, res) => {
   const dataToSend = {
     "cameraId": cameraId,
     "handle": "completedMultiple",
-    "file": filename
+    "file": filename,
+    "timestamp": new Date().toISOString()
   };
 
   notifyWebSocketClients(dataToSend);

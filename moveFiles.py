@@ -1,6 +1,8 @@
 import os
 import re
 import time
+import json
+import threading
 import subprocess
 from pathlib import Path
 from signcollect_monitor import SignCollectMonitor  # Import the monitor client
@@ -12,6 +14,72 @@ monitor = SignCollectMonitor(
     description='File organization service for video files',
     heartbeat_interval=1800
 )
+
+# Track last download event from WebSocket
+last_download_time = 0
+DOWNLOAD_COOLDOWN = 5 * 60  # 5 minutes after last download before moving files
+WS_URL = "ws://localhost:8081"
+
+
+def websocket_listener():
+    """Listen for download events from startServer_beta.js via WebSocket"""
+    global last_download_time
+    try:
+        import websocket
+    except ImportError:
+        print("WARNING: websocket-client not installed. Download detection disabled.")
+        print("Install with: pip3 install websocket-client")
+        return
+
+    def on_message(ws, message):
+        global last_download_time
+        try:
+            data = json.loads(message)
+            handle = data.get("handle", "")
+            if handle in ("fileDownloaded", "completedMultiple"):
+                last_download_time = time.time()
+                print(f"Download event received: {handle} - {data.get('file', '?')} - pausing moves for {DOWNLOAD_COOLDOWN}s")
+        except json.JSONDecodeError:
+            pass
+
+    def on_close(ws, close_status_code, close_msg):
+        print("WebSocket disconnected. Reconnecting in 10s...")
+        time.sleep(10)
+        start_websocket()
+
+    def on_error(ws, error):
+        print(f"WebSocket error: {error}")
+
+    def on_open(ws):
+        print(f"WebSocket connected to {WS_URL}")
+
+    def start_websocket():
+        try:
+            ws = websocket.WebSocketApp(
+                WS_URL,
+                on_message=on_message,
+                on_close=on_close,
+                on_error=on_error,
+                on_open=on_open,
+            )
+            ws.run_forever()
+        except Exception as e:
+            print(f"WebSocket connection failed: {e}. Retrying in 30s...")
+            time.sleep(30)
+            start_websocket()
+
+    start_websocket()
+
+
+def wait_for_downloads_to_finish():
+    """Wait until no download events have been received for DOWNLOAD_COOLDOWN seconds"""
+    while True:
+        elapsed = time.time() - last_download_time
+        if last_download_time == 0 or elapsed >= DOWNLOAD_COOLDOWN:
+            return
+        remaining = int(DOWNLOAD_COOLDOWN - elapsed)
+        print(f"Downloads recently active. Waiting {remaining}s before moving files...")
+        time.sleep(30)
 
 def rsync_copy(source, destination, retries=2):
     """
@@ -168,11 +236,18 @@ if __name__ == "__main__":
     # Register with monitoring system
     monitor.register()
 
-    print("Starting moveFiles service - will run every 24 hours")
+    # Start WebSocket listener in background thread
+    ws_thread = threading.Thread(target=websocket_listener, daemon=True)
+    ws_thread.start()
+
+    print("Starting moveFiles service - will run every 15 minutes")
     while True:
         try:
             # Send heartbeat at start of each cycle
             monitor.send_heartbeat()
+
+            # Wait if cameras are actively downloading files
+            wait_for_downloads_to_finish()
 
             print(f"\n=== Starting file move operation at {time.strftime('%Y-%m-%d %H:%M:%S')} ===")
             move_files()
