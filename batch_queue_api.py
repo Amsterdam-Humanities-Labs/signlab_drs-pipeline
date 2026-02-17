@@ -4,6 +4,7 @@ from python_get_resolve import GetResolve
 from pathlib import Path
 from video_api_client import VideoAPIClient
 from signcollect_monitor import SignCollectMonitor
+from drs_render_client import DRSRenderClient
 
 # Ensure output is flushed immediately to logs
 sys.stdout.reconfigure(line_buffering=True)
@@ -16,6 +17,13 @@ monitor = SignCollectMonitor(
     description='DaVinci Resolve batch queue - API-driven processing',
     heartbeat_interval=3600
 )
+
+# Initialize render coordination client to avoid double rendering
+MACHINE_NAME = "mac-studio"
+render_client = DRSRenderClient(machine_name=MACHINE_NAME)
+
+# Track actively claimed files for crash cleanup
+active_claims = []
 
 # Path constants
 BASE_DIR = Path("/Users/signlab/signCollect/AIHR-FGW-TEST-SIGNLAB (Projectfolder)/studioFiles")
@@ -464,6 +472,8 @@ def process_batch(files_batch, post_noncropped_dir, batch_num, total_batches):
     # Move rendered files to post_noncropped
     print("Moving rendered files to post_noncropped...")
     api_client = VideoAPIClient('https://signcollect.nl/renderServer')
+    completed_files = []
+    failed_files = []
 
     for rendered_file in export_dir.glob("*.mp4"):
         original_filename = rendered_file.name
@@ -483,6 +493,7 @@ def process_batch(files_batch, post_noncropped_dir, batch_num, total_batches):
             rsync_copy(rendered_file, dest)
             rendered_file.unlink()
             print(f"  Moved {clean_filename} to post_noncropped")
+            completed_files.append(clean_filename)
 
             try:
                 first_char = clean_filename[0].upper()
@@ -500,6 +511,23 @@ def process_batch(files_batch, post_noncropped_dir, batch_num, total_batches):
 
         except OSError as e:
             print(f"  Failed to move {clean_filename}: {e}")
+            failed_files.append(clean_filename)
+
+    # Mark completed files via render coordination API
+    if completed_files:
+        render_client.complete_files(completed_files)
+        print(f"  Marked {len(completed_files)} files as completed via render API")
+        for f in completed_files:
+            if f in active_claims:
+                active_claims.remove(f)
+
+    # Release failed files so other machines can retry
+    if failed_files:
+        render_client.release_files(failed_files)
+        print(f"  Released {len(failed_files)} failed files back to pool")
+        for f in failed_files:
+            if f in active_claims:
+                active_claims.remove(f)
 
     # Force quit DaVinci Resolve to free memory
     print("Closing DaVinci Resolve to free memory...")
@@ -519,6 +547,10 @@ def main():
     print("Killing any existing DaVinci Resolve process...")
     os.system("pkill -9 -f 'DaVinci Resolve'")
     time.sleep(3)
+
+    # Clean up stale claims from previous crashed runs
+    print("Cleaning up stale render claims (>60 min old)...")
+    render_client.cleanup_stale(max_age_minutes=60)
 
     # Verify mount health
     if not verify_mount_health():
@@ -563,12 +595,39 @@ def main():
 
     print(f"Split into {total_batches} batch(es) of up to {BATCH_LIMIT} files each")
 
-    # 5. Process each batch
+    # 5. Process each batch with render coordination
     for batch_num, batch in enumerate(batches, 1):
-        first_file = batch[0]
+        # Claim this batch's files via render coordination API
+        batch_filenames = [f.name for f in batch]
+        claimed_filenames = render_client.claim_files(batch_filenames)
+        claimed_set = set(claimed_filenames)
+
+        # Filter batch to only files we successfully claimed
+        claimed_batch = [f for f in batch if f.name in claimed_set]
+        skipped = len(batch) - len(claimed_batch)
+
+        if skipped > 0:
+            print(f"  Skipped {skipped} files already claimed by another machine")
+
+        if not claimed_batch:
+            print(f"  Batch {batch_num}: all files already claimed by other machines, skipping")
+            continue
+
+        # Track active claims for crash cleanup
+        active_claims.extend(claimed_filenames)
+
+        print(f"  Batch {batch_num}: claimed {len(claimed_batch)}/{len(batch)} files")
+
+        first_file = claimed_batch[0]
         post_noncropped_dir = all_post_dirs[str(first_file)]
-        success = process_batch(batch, post_noncropped_dir, batch_num, total_batches)
+        success = process_batch(claimed_batch, post_noncropped_dir, batch_num, total_batches)
         if not success:
+            # Release all claims from this batch on failure
+            render_client.release_files(claimed_filenames)
+            print(f"  Released {len(claimed_filenames)} claims after batch failure")
+            for f in claimed_filenames:
+                if f in active_claims:
+                    active_claims.remove(f)
             print(f"Batch {batch_num} failed. Stopping.")
             break
 
@@ -584,8 +643,18 @@ if __name__ == "__main__":
             main()
         except KeyboardInterrupt:
             print("\nService stopped by user")
+            # Release any active claims on shutdown
+            if active_claims:
+                render_client.release_files(active_claims)
+                print(f"Released {len(active_claims)} active claims on shutdown")
+                active_claims.clear()
             break
         except Exception as e:
             print(f"Unexpected error: {e}")
+            # Release any active claims on crash
+            if active_claims:
+                render_client.release_files(active_claims)
+                print(f"Released {len(active_claims)} active claims after crash")
+                active_claims.clear()
             print("Sleeping for 1 hour before retry...")
             time.sleep(60 * 60)
