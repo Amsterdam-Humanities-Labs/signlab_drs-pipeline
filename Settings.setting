@@ -190,8 +190,8 @@
 			Inputs = {
 				XOffset = Input { Value = 30, },
 				YOffset = Input { Value = 54, },
-				XSize = Input { Value = 2100, },
-				YSize = Input { Value = 3733, },
+				XSize = Input { Value = 2400, },
+				YSize = Input { Value = 4267, },
 				KeepAspect = Input { Value = 1, },
 				KeepCentered = Input { Value = 1, },
 				Input = Input {

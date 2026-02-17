@@ -231,40 +231,21 @@ def process_frames(frame_paths, output_dir=None):
 
             # If we have a midpoint, create a horizontal crop centered on it
             if midpoint_x is not None:
-                crop_width = 1440
-                half_crop = crop_width // 2
                 current_width = processed_image.shape[1]
-                
-                # Calculate crop boundaries
-                new_left = max(0, midpoint_x - half_crop)
-                new_right = min(current_width, new_left + crop_width)
-                
-                # Adjust if we hit the right edge
-                if new_right == current_width:
-                    new_left = max(0, current_width - crop_width)
-                
-                #target display aspect ratio is 1.15
+
+                # Always derive width from height to maintain 1.15:1 aspect ratio
                 target_width = int(target_height * 1.15)
+                half_crop = target_width // 2
 
-                if new_right - new_left < target_width:
-                    # Calculate new left and right based on target width
-                    new_left = max(0, midpoint_x - target_width // 2)
-                    new_right = min(current_width, new_left + target_width)
-                
-                # print(f"New left: {new_left}, New right: {new_right}, Current width: {current_width}")
-                #if new_left is maxed out, then adjust new_right accordingly
-                if new_left == 0:
-                    #calculate new_left with midpoint_x and adjust new difference with new_right
-                    new_right = midpoint_x + (midpoint_x - new_left) - 50
-                if new_right == current_width:
-                    #calculate new_right with midpoint_x and adjust new difference with new_left
-                    new_left = midpoint_x - (new_right - midpoint_x) + 50
+                # Center crop on midpoint_x
+                new_left = max(0, midpoint_x - half_crop)
+                new_right = new_left + target_width
 
+                # Adjust if we hit the right edge
+                if new_right > current_width:
+                    new_right = current_width
+                    new_left = max(0, current_width - target_width)
 
-                # #add extra margin to left and right
-                # new_left = max(0, new_left - 200)
-                # new_right = min(current_width, new_right + 200)
-                # Create the final cropped image
                 processed_image = processed_image[:, new_left:new_right]
         
         # Save the processed frame
@@ -645,6 +626,33 @@ def main():
         print("No tasks to process.")
 
 if __name__ == "__main__":
+    # Single file test mode: python crop_znn.py test <input_file> <output_dir>
+    if len(sys.argv) >= 2 and sys.argv[1] == "test":
+        if len(sys.argv) < 3:
+            print("Usage: python crop_znn.py test <input_file> [output_dir]")
+            sys.exit(1)
+
+        input_file = sys.argv[2]
+        if not os.path.exists(input_file):
+            print(f"File not found: {input_file}")
+            sys.exit(1)
+
+        # Default output dir is same folder as input, under "post/"
+        if len(sys.argv) >= 4:
+            output_dir = sys.argv[3]
+        else:
+            output_dir = os.path.join(os.path.dirname(os.path.dirname(input_file)), "post")
+
+        os.makedirs(output_dir, exist_ok=True)
+        output_file = os.path.join(output_dir, os.path.basename(input_file))
+
+        print(f"=== TEST MODE ===")
+        print(f"Input:  {input_file}")
+        print(f"Output: {output_file}")
+
+        process_video_file(input_file, output_file)
+        sys.exit(0)
+
     # Register with monitoring system
     monitor.register()
 

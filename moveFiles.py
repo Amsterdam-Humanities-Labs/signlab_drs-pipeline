@@ -3,6 +3,15 @@ import re
 import time
 import subprocess
 from pathlib import Path
+from signcollect_monitor import SignCollectMonitor  # Import the monitor client
+
+# Initialize the monitor
+monitor = SignCollectMonitor(
+    client_id='drs-file-mover',
+    client_name='DRS File Mover',
+    description='File organization service for video files',
+    heartbeat_interval=1800
+)
 
 def rsync_copy(source, destination, retries=2):
     """
@@ -61,38 +70,35 @@ def extract_date_from_filename(filename):
         return convert_date_format(match.group(1))
     return None
 
-def is_mount_available(mount_path):
-    """Check if the rclone mount is available and responsive"""
+def check_mount_health(mount_path):
+    """Check if rclone mount is healthy and accessible"""
     try:
-        # First check if the mount point is actually mounted using system tools
-        result = subprocess.run(['mount'], capture_output=True, text=True)
-        mount_output = result.stdout
-        
-        # Check if our specific mount path appears in the mount list with FUSE
-        mount_found = False
-        for line in mount_output.split('\n'):
-            if mount_path in line and 'fuse' in line.lower():
-                mount_found = True
-                break
-        
-        if not mount_found:
+        # Check if the rclone marker file exists in mount directory
+        marker_file = os.path.join(mount_path, "AIHR-FGW-TEST-SIGNLAB (Projectfolder)", "do_not_remove_for_rclone")
+        if not os.path.exists(marker_file):
+            print(f"rclone marker file not found: {marker_file}")
             return False
         
-        # Additionally verify the mount is responsive and has expected content
-        test_path = os.path.join(mount_path, "studioFiles")
+        # Additionally verify the mount is responsive
+        test_path = os.path.join(mount_path, "AIHR-FGW-TEST-SIGNLAB (Projectfolder)")
         if not os.path.exists(test_path):
+            print(f"Expected directory not found in mount: {test_path}")
             return False
         
-        # Try a quick directory listing and verify it's not empty (would be empty if unmounted)
-        contents = os.listdir(test_path)
-        if not contents:
+        # Try to access files to ensure mount is responsive
+        try:
+            contents = os.listdir(test_path)
+            # Verify we can see some expected content (not just empty local directory)
+            if not contents:
+                print(f"Mount directory appears empty, may be unmounted: {test_path}")
+                return False
+            return True
+        except (OSError, PermissionError) as e:
+            print(f"Mount appears unresponsive: {e}")
             return False
             
-        return True
-        
-    except (OSError, PermissionError):
-        return False
-    except Exception:
+    except Exception as e:
+        print(f"Error checking mount health: {e}")
         return False
 
 def move_files():
@@ -104,8 +110,9 @@ def move_files():
         return
     
     # Check if target mount is available before proceeding
-    if not is_mount_available(target_base):
-        print(f"Target mount not available or unresponsive: {target_base}")
+    mount_base = "/Users/signlab/signCollect"
+    if not check_mount_health(mount_base):
+        print(f"Target mount not available or unresponsive: {mount_base}")
         print("Skipping this cycle - rclone mount may be down")
         return
     
@@ -145,7 +152,7 @@ def move_files():
                 if "rsync failed" in error_message:
                     print(f"rsync failed for {filename}: {e}")
                     # Check if it's a mount issue
-                    if not is_mount_available(target_base):
+                    if not check_mount_health(mount_base):
                         print(f"Mount appears to be down during operation. Stopping batch.")
                         break
                 else:
@@ -158,14 +165,20 @@ def move_files():
     print(f"\nSummary: {moved_count} files moved, {error_count} errors")
 
 if __name__ == "__main__":
+    # Register with monitoring system
+    monitor.register()
+
     print("Starting moveFiles service - will run every 24 hours")
     while True:
         try:
+            # Send heartbeat at start of each cycle
+            monitor.send_heartbeat()
+
             print(f"\n=== Starting file move operation at {time.strftime('%Y-%m-%d %H:%M:%S')} ===")
             move_files()
             print(f"=== File move operation completed at {time.strftime('%Y-%m-%d %H:%M:%S')} ===")
             print("Sleeping for 24 hours until next run...")
-            time.sleep(3 * 60 * 60)  # Sleep for 24 hours (86400 seconds)
+            time.sleep(1 * 60 * 15)  # Sleep for 1 hour (3600 seconds)
         except KeyboardInterrupt:
             print("\nService stopped by user")
             break

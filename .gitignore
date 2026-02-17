@@ -8,6 +8,14 @@ env/
 venv/
 ENV/
 
+# Virtual environment (local venv in project root)
+lib/
+bin/
+share/
+include/
+pyvenv.cfg
+sc/
+
 # Logs
 logs/
 *.log
@@ -23,9 +31,15 @@ startup.pid
 *.mov
 *.avi
 
+# Model files
+*.pt
+
 # Temporary files
 temp/
 .DS_Store
+batch.bak
+last_keyboard_activity.txt
+mount_recovery_needed
 
 # IDE
 .idea/

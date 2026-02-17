@@ -5,6 +5,15 @@ import time
 import requests
 from datetime import datetime
 from collections import Counter
+from signcollect_monitor import SignCollectMonitor  # Import the monitor client
+
+# Initialize the monitor
+monitor = SignCollectMonitor(
+    client_id='drs-file-lister',
+    client_name='DRS File Lister',
+    description='File counting and status reporting service',
+    heartbeat_interval=3600
+)
 
 def list_and_count_files():
     base_dir = "/Users/signlab/signCollect/AIHR-FGW-TEST-SIGNLAB (Projectfolder)/studioFiles"
@@ -79,24 +88,30 @@ def post_results(data):
         return False
 
 if __name__ == "__main__":
+    # Register with monitoring system
+    monitor.register()
+
     while True:
+        # Send heartbeat at start of each cycle
+        monitor.send_heartbeat()
+
         print(f"Running file count at {datetime.now()}")
         data = list_and_count_files()
-        
+
         # Print summary to console
         if "error" in data:
             print(data["error"])
         else:
             for folder in data["folders"]:
-                status_symbol = "✓ OK" if folder["is_ok"] else "✗ ERROR"
+                status_symbol = "OK" if folder["is_ok"] else "ERROR"
                 print(f"{folder['date']}: Total {folder['total']} files - {status_symbol}")
-        
+
         # Post to server
         success = post_results(data)
         if success:
             print("Successfully posted results")
         else:
             print("Failed to post results")
-        
+
         print("Sleeping for 1 hour...")
         time.sleep(3600)  # Sleep for 1 hour

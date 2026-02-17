@@ -47,6 +47,11 @@ class ProcessMonitor:
                 'cwd': '/Users/signlab/drs'
             },
             {
+                'name': 'keyboardMonitor',
+                'command': ['/usr/bin/python3', '/Users/signlab/drs/keyboard_monitor.py'],
+                'cwd': '/Users/signlab/drs'
+            },
+            {
                 'name': 'moveFiles',
                 'command': ['/usr/bin/python3', '/Users/signlab/drs/moveFiles.py'],
                 'cwd': '/Users/signlab/drs'
@@ -87,7 +92,6 @@ class ProcessMonitor:
                     '--allow-non-empty',
                     '--cache-dir', '/Volumes/cacheDisk/rclone',
                     '--vfs-cache-mode', 'full',
-                    '--timeout', '0'
                 ],
                 'cwd': '/Users/signlab'
             },
@@ -95,6 +99,21 @@ class ProcessMonitor:
                    'name': 'listFiles',
                 'command': ['/usr/bin/python3', '/Users/signlab/drs/listFiles.py'],
                 'cwd': '/Users/signlab/drs'
+            },
+            {
+                'name': 'networkManager',
+                'command': ['/usr/bin/python3', '/Users/signlab/drs/network_manager.py'],
+                'cwd': '/Users/signlab/drs'
+            },
+            {
+                'name': 'watchdog',
+                'command': ['/bin/bash', '/Users/signlab/drs/watchdog.sh'],
+                'cwd': '/Users/signlab/drs'
+            },
+            {
+                'name': 'qrScanner',
+                'command': ['/Users/signlab/drs/bin/python3', '/Users/signlab/drs/qr/qr_scanner_service.py'],
+                'cwd': '/Users/signlab/drs/qr'
             }
         ]
         self.running = True
@@ -120,19 +139,10 @@ class ProcessMonitor:
     def check_mount_health(self) -> bool:
         """Check if rclone mount is healthy and accessible"""
         try:
-            # First check if the mount point is actually mounted using system tools
-            result = subprocess.run(['mount'], capture_output=True, text=True)
-            mount_output = result.stdout
-            
-            # Check if our specific mount path appears in the mount list
-            mount_found = False
-            for line in mount_output.split('\n'):
-                if self.mount_path in line and 'fuse' in line.lower():
-                    mount_found = True
-                    break
-            
-            if not mount_found:
-                logging.warning(f"rclone mount not found in system mount table: {self.mount_path}")
+            # Check if the rclone marker file exists in mount directory
+            marker_file = os.path.join(self.mount_path, "AIHR-FGW-TEST-SIGNLAB (Projectfolder)", "do_not_remove_for_rclone")
+            if not os.path.exists(marker_file):
+                logging.warning(f"rclone marker file not found: {marker_file}")
                 return False
             
             # Additionally verify the mount is responsive
@@ -168,6 +178,22 @@ class ProcessMonitor:
         if rclone_service:
             logging.warning("Mount unhealthy - restarting rclone service")
             self.restart_service(rclone_service)
+            
+            # Check if there's a recovery marker file and remove it after successful restart
+            marker_file = '/Users/signlab/drs/mount_recovery_needed'
+            if os.path.exists(marker_file):
+                # Wait a bit for mount to stabilize
+                time.sleep(10)
+                
+                # Verify mount is working before removing marker
+                if self.check_mount_health():
+                    try:
+                        os.remove(marker_file)
+                        logging.info(f"Removed mount recovery marker file: {marker_file}")
+                    except Exception as e:
+                        logging.error(f"Failed to remove marker file {marker_file}: {e}")
+                else:
+                    logging.warning("Mount still unhealthy after restart, keeping marker file")
         else:
             logging.error("Could not find rclone service configuration")
 

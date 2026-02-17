@@ -1,34 +1,8 @@
-import os, sys, glob, shutil, time, json, subprocess, re, gc
+import os, sys, glob, shutil, time, json, subprocess
 from datetime import datetime, timedelta
 from python_get_resolve import GetResolve
 from pathlib import Path
 from video_api_client import VideoAPIClient  # Import the API client
-from signcollect_monitor import SignCollectMonitor  # Import the monitor client
-
-# Initialize the monitor
-monitor = SignCollectMonitor(
-    client_id='drs-batch-processor',
-    client_name='DRS Batch Processor',
-    description='DaVinci Resolve video rendering pipeline',
-    heartbeat_interval=3600
-)
-
-
-def clean_rendered_filename(filename):
-    """
-    Clean up DaVinci Resolve's auto-appended suffixes from filename.
-    DaVinci may add '_1', '_2', ' 1', ' 2', '_02418924' etc. before the extension.
-    Example: 'L20241217_1030_1.mp4' -> 'L20241217_1030.MP4'
-    Example: 'M20241217_1030 1.mp4' -> 'M20241217_1030.MP4'
-    Example: 'M20260112_9403_02418924.mp4' -> 'M20260112_9403.MP4'
-    """
-    # Pattern to match: base_name + optional suffix (_N or space N or _NNNNNNNN) + extension
-    # Original filename pattern: [L|M|R]YYYYMMDD_HHMM.MP4
-    match = re.match(r'^([LMR]\d{8}_\d{4})(?:_\d+| \d+)?\.mp4$', filename, re.IGNORECASE)
-    if match:
-        base_name = match.group(1)
-        return f"{base_name}.MP4"  # Return with original .MP4 extension
-    return filename  # Return unchanged if pattern doesn't match
 
 # Ensure output is flushed immediately to logs
 sys.stdout.reconfigure(line_buffering=True)
@@ -39,8 +13,8 @@ def handle_mount_failure():
     mount_path = "/Users/signlab/signCollect"
     try:
         print(f"Unmounting {mount_path} due to mount failure...")
-        result = subprocess.run(['umount', '-f', mount_path],
-                              capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=30)
+        result = subprocess.run(['umount', '-f', mount_path], 
+                              capture_output=True, text=True, timeout=30)
         if result.returncode == 0:
             print(f"Successfully unmounted {mount_path}")
         else:
@@ -62,9 +36,9 @@ def trigger_mount_recovery():
         
         # Unmount the rclone mount
         print(f"Unmounting {mount_path}...")
-        result = subprocess.run(['umount', '-f', mount_path],
-                              capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=30)
-
+        result = subprocess.run(['umount', '-f', mount_path], 
+                              capture_output=True, text=True, timeout=30)
+        
         if result.returncode == 0:
             print(f"Successfully unmounted {mount_path}")
         else:
@@ -170,7 +144,7 @@ def rsync_copy(source, destination, retries=2):
             cmd = ["rsync", "-av", "--progress", str(source), str(destination)]
             
             # Run rsync command
-            result = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace', check=True)
+            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
             
             # If successful, check file size
             if os.path.exists(destination) and os.path.getsize(destination) == 0:
@@ -241,7 +215,7 @@ def get_video_orientation(filepath):
         return None, "file_not_found"
 
     cmd = ["/opt/homebrew/bin/mediainfo", "--Output=JSON", filepath]
-    result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8', errors='replace')
+    result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8')
     data = json.loads(result.stdout)
 
     try:
@@ -325,7 +299,7 @@ def open_davinci_minimized():
         "-e", 'delay 20',
         "-e", 'tell application "System Events" to set visible of process "DaVinci Resolve" to false'
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace')
+    result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
         print(f"Warning: Could not minimize DaVinci Resolve: {result.stderr}")
     else:
@@ -337,7 +311,7 @@ def minimize_davinci():
         "osascript",
         "-e", 'tell application "System Events" to set visible of process "DaVinci Resolve" to false'
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace')
+    result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
         print(f"Warning: Could not minimize DaVinci Resolve: {result.stderr}")
     else:
@@ -392,10 +366,7 @@ current_processing_post_dir = None
 
 def main():
     global current_processing_filename, current_processing_post_dir
-
-    # Clean up memory from previous runs
-    gc.collect()
-
+    
     homedir = Path("/Users/signlab/")
     base_dir = Path("/Users/signlab/signCollect/AIHR-FGW-TEST-SIGNLAB (Projectfolder)/studioFiles")
     import_dir = homedir / "drs/import"
@@ -416,12 +387,12 @@ def main():
             print("Mount recovery successful. Proceeding with processing.")
         else:
             print("Mount recovery failed. Cannot proceed with processing.")
-            print("Sleeping for 1 minute before retrying...")
-            time.sleep(60)  # 1 minute  # Sleep for 30 minutes instead of exiting
+            print("Sleeping for 30 minutes before retrying...")
+            time.sleep(1800)  # Sleep for 30 minutes instead of exiting
             return
 
     # Only scan directories from the past 3 days
-    date_threshold = datetime.now() - timedelta(days=7)  # Look back 1 week
+    date_threshold = datetime.now() - timedelta(days=3)
     all_items = os.listdir(base_dir)
     date_folders = []
     for item in all_items:
@@ -438,8 +409,8 @@ def main():
 
     if not date_folders:
         print(f"No date folders found in the past 3 days (since {date_threshold.strftime('%Y-%m-%d')}).")
-        print("Sleeping for 1 minute before checking again...")
-        time.sleep(60)  # 1 minute  # Sleep for 30 minutes instead of exiting
+        print("Sleeping for 30 minutes before checking again...")
+        time.sleep(1800)  # Sleep for 30 minutes instead of exiting
         return
 
     # Check if there are any raw files to process before opening DaVinci Resolve
@@ -467,51 +438,22 @@ def main():
             files_to_process.append((raw_file, date_folder, post_dir))
     
     if not files_to_process:
-        monitor.send_heartbeat_with_stats(
-            status='idle',
-            message='No new raw files found to process',
-            stats={'files_found': 0}
-        )
         print("No new raw files found to process.")
-        print("Sleeping for 1 minute before checking again...")
-        time.sleep(60)  # 1 minute  # Sleep for 30 minutes instead of exiting
+        print("Sleeping for 30 minutes before checking again...")
+        time.sleep(1800)  # Sleep for 30 minutes instead of exiting
         return
-
+        
     if len(files_to_process) <= 1:
-        monitor.send_heartbeat_with_stats(
-            status='waiting',
-            message=f'Found only {len(files_to_process)} file(s), need at least 2',
-            stats={'files_found': len(files_to_process)}
-        )
         print(f"Found only {len(files_to_process)} file(s) to process. Need at least 2 files to start DaVinci Resolve.")
-        print("Sleeping for 1 minute before checking again...")
-        time.sleep(60)  # 1 minute  # Sleep for 30 minutes instead of exiting
+        print("Sleeping for 30 minutes before checking again...")
+        time.sleep(1800)  # Sleep for 30 minutes instead of exiting
         return
-
-    # Sort files to prioritize M camera files first, then L and R
-    def get_camera_priority(file_tuple):
-        filename = os.path.basename(file_tuple[0])
-        if filename.startswith('M'):
-            return 0  # M files first
-        elif filename.startswith('L'):
-            return 1  # L files second
-        else:  # R files
-            return 2  # R files last
-
-    files_to_process.sort(key=get_camera_priority)
-    print(f"Files sorted by camera priority (M first, then L, then R)")
-
-    # Limit batch size to prevent "Too many open files" error
-    BATCH_LIMIT = 50
-    if len(files_to_process) > BATCH_LIMIT:
-        print(f"Limiting to {BATCH_LIMIT} files per batch (out of {len(files_to_process)} total)")
-        files_to_process = files_to_process[:BATCH_LIMIT]
 
     # TEMPORARILY DISABLED: Check if user has been idle for at least 1 hour before starting DaVinci
     if not is_user_idle_long_enough(required_idle_seconds=1):
         print("User activity detected. Skipping processing this cycle.")
-        print("Sleeping for 1 minute before checking again...")
-        time.sleep(60)  # 1 minute  # Sleep for 30 minutes instead of continuing
+        print("Sleeping for 30 minutes before checking again...")
+        time.sleep(1800)  # Sleep for 30 minutes instead of continuing
         return
 
     print(f"Found {len(files_to_process)} files to process. Opening DaVinci Resolve...")
@@ -540,14 +482,7 @@ def main():
             os.remove(file_path)
 
     total_processed = 0
-    total_files = len(files_to_process)
     for raw_file, date_folder, post_dir in files_to_process:
-        # Send heartbeat with progress stats every file
-        monitor.send_heartbeat_with_stats(
-            status='processing',
-            message=f'Processing file {total_processed + 1}/{total_files}',
-            stats={'processed': total_processed, 'total': total_files, 'current_file': os.path.basename(raw_file)}
-        )
         if not post_dir.exists():
             os.makedirs(post_dir)
             
@@ -558,10 +493,10 @@ def main():
         current_processing_filename = filename
         current_processing_post_dir = post_dir
         
-        # DISABLED: Skip file checks temporarily disabled
-        # if should_skip_file(filename, post_dir):
-        #     print(f"Skipping {filename} - skip file exists (previously failed)")
-        #     continue
+        # Check if this file should be skipped due to previous failures
+        if should_skip_file(filename, post_dir):
+            print(f"Skipping {filename} - skip file exists (previously failed)")
+            continue
         
         # Check video orientation
         rotation, orientation = get_video_orientation(raw_file)
@@ -823,54 +758,29 @@ def main():
                     
         print(f"Rendering finished for {filename}.")
 
-        # Find rendered file - DaVinci may add suffix like _02418924 to filename
-        rendered_file = None
-        for f in os.listdir(export_dir):
-            if f.startswith(base_name) and f.lower().endswith('.mp4'):
-                rendered_file = export_dir / f
-                # Clean up DaVinci's auto-appended suffixes
-                clean_name = clean_rendered_filename(f)
-                if clean_name != f:
-                    print(f"Found rendered file: {f} -> cleaned to {clean_name}")
-                else:
-                    print(f"Found rendered file: {f}")
-                break
+        api_client = VideoAPIClient('https://signcollect.nl/renderServer')  
+        api_client.update_rendered(filename, 'm_file')
 
-        if rendered_file and rendered_file.exists():
-            # Use cleaned filename for destination
-            clean_name = clean_rendered_filename(rendered_file.name)
-            dest_render = post_dir / clean_name
-
+        rendered_file = export_dir / f"{base_name}.mp4"
+        if rendered_file.exists():
+            dest_render = post_dir / f"{base_name}.mp4"
             if not dest_render.exists():
                 try:
                     rsync_copy(rendered_file, dest_render)
                     minimize_davinci()  # Minimize DaVinci Resolve after copying file
                     # Delete source file after successful copy to mimic move behavior
                     os.remove(rendered_file)
-                    print(f"Successfully moved {rendered_file.name} to post directory as {clean_name}")
-
-                    # Update API with correct file_type based on first character
-                    api_client = VideoAPIClient('https://signcollect.nl/renderServer')
-                    first_char = clean_name[0].upper()
-                    if first_char == 'L':
-                        file_type = 'l_file'
-                    elif first_char == 'R':
-                        file_type = 'r_file'
-                    else:
-                        file_type = 'm_file'
-
-                    try:
-                        api_client.update_rendered(clean_name, file_type)
-                        print(f"Updated API for {clean_name} ({file_type})")
-                    except Exception as api_err:
-                        print(f"Warning: Failed to update API for {clean_name}: {api_err}")
-
+                    print(f"Successfully moved {base_name}.mp4 to post directory using rsync")
                 except OSError as e:
-                    print(f"Failed to move {rendered_file.name} to post directory: {e}")
+                    print(f"Failed to move {base_name}.mp4 to post directory: {e}")
+                    # Create skip file for failed file operations
+                    create_skip_file(filename, post_dir, f"File move failed: {e}")
             else:
-                print(f"Rendered file {clean_name} already exists in post directory.")
+                print(f"Rendered file {base_name}.mp4 already exists in post directory.")
         else:
-            print(f"Rendered file starting with {base_name} not found in export directory.")
+            print(f"Rendered file {base_name}.mp4 not found in export directory.")
+            # Create skip file for failed rendering
+            create_skip_file(filename, post_dir, "Render failed - MP4 not found in export directory")
 
         if temp_import_path.exists():
             os.remove(temp_import_path)
@@ -894,40 +804,41 @@ def main():
             open_davinci_minimized()
             time.sleep(15)
 
-    # Send completion heartbeat
-    monitor.send_heartbeat_with_stats(
-        status='completed',
-        message=f'Batch completed: {total_processed} files processed',
-        stats={'processed': total_processed, 'total': total_files}
-    )
     print("All files processed.")
 
 if __name__ == "__main__":
-    # Run once and exit - use batch.sh as watchdog for automatic restart
-    # This ensures all file descriptors are released between runs
-    exit_code = 0
-    try:
-        # Register with monitoring system and send heartbeat
-        monitor.register()
-        monitor.send_heartbeat()
+    while True:
+        try:
+            current_time = datetime.now()
 
-        current_time = datetime.now()
-        print(f"Starting batch processing at {current_time.strftime('%Y-%m-%d %H:%M:%S')}")
-        main()
-        print(f"Batch processing completed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            print(f"Starting batch processing at {current_time.strftime('%Y-%m-%d %H:%M:%S')}")
+            main()
+            print(f"Batch processing completed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
-        # Force kill DaVinci Resolve after processing completes
-        print("Forcefully terminating DaVinci Resolve to ensure clean state...")
-        os.system("pkill -9 -f 'DaVinci Resolve'")
+            # Force kill DaVinci Resolve after processing completes
+            print("Forcefully terminating DaVinci Resolve to ensure clean state...")
+            os.system("pkill -9 -f 'DaVinci Resolve'")
+            time.sleep(10)  # Short delay after killing DaVinci
 
-    except Exception as e:
-        print(f"ERROR: Main function crashed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        print(f"Error details: {str(e)}")
-        exit_code = 1
+        except Exception as e:
+            print(f"ERROR: Main function crashed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            print(f"Error details: {str(e)}")
 
-        # Force kill DaVinci Resolve after a crash as well
-        print("Forcefully terminating DaVinci Resolve after crash...")
-        os.system("pkill -9 -f 'DaVinci Resolve'")
+            # Create skip file for the currently processing file if available
+            # if current_processing_filename and current_processing_post_dir:
+                # print(f"Creating skip file for {current_processing_filename} due to main function crash")
+                # create_skip_file(current_processing_filename, current_processing_post_dir,
+                #                f"Main function crashed with error: {str(e)}")
 
-    print("Exiting batch.py - watchdog will restart...")
-    sys.exit(exit_code)
+            # Force kill DaVinci Resolve after a crash as well
+            print("Forcefully terminating DaVinci Resolve after crash...")
+            os.system("pkill -9 -f 'DaVinci Resolve'")
+            time.sleep(5)
+
+            print("Restarting the main function after a short delay...")
+            time.sleep(5)  # Short delay before restarting the function
+            continue
+
+        # Sleep briefly before next iteration
+        print(f"Sleeping for 60 minutes before next run...")
+        time.sleep(3600)  # Sleep for 60 minutes

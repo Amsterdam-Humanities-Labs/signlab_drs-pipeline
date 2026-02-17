@@ -9,6 +9,20 @@ const { exec } = require('child_process'); // Import exec from child_process
 const https = require('https');
 const axios = require('axios');
 const FormData = require('form-data');
+const { SignCollectMonitor } = require('./signcollect_monitor.js');
+
+// Initialize the monitor
+const monitor = new SignCollectMonitor(
+  'drs-express-server',
+  'DRS Express Server',
+  'Camera communication server with WebSocket support',
+  3600
+);
+
+// Register with monitoring system and start auto-heartbeat
+monitor.register().then(() => {
+  monitor.startAutoHeartbeat();
+});
 
 var ftpBusy = false;
 https.globalAgent.options.rejectUnauthorized = false;

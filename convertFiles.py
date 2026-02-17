@@ -6,6 +6,15 @@ from datetime import datetime, timedelta
 from pathlib import Path
 import json
 import time
+from signcollect_monitor import SignCollectMonitor  # Import the monitor client
+
+# Initialize the monitor
+monitor = SignCollectMonitor(
+    client_id='drs-converter',
+    client_name='DRS File Converter',
+    description='Video conversion and upload service',
+    heartbeat_interval=3600
+)
 
 # Configuration
 DEST_BASE_DIR = '/Users/signlab/signCollect/AIHR-FGW-TEST-SIGNLAB (Projectfolder)/studioFiles'
@@ -40,16 +49,16 @@ def upload_file_to_server(file_path):
         print(f"← upload error: {err}")
         raise
 
-def get_past_three_months_dates():
-    """Generate date strings for the past 3 months in YYYY-MM-DD format"""
-    dates = []
-    current_date = datetime.now()
-    
-    for i in range(90):  # Past 90 days
-        date = current_date - timedelta(days=i)
-        dates.append(date.strftime('%Y-%m-%d'))
-    
-    return dates
+def get_all_date_dirs():
+    """Get all date-formatted directory names from the base directory"""
+    date_pattern = re.compile(r'^\d{4}-\d{2}-\d{2}$')
+    dirs = []
+    if os.path.exists(DEST_BASE_DIR):
+        for name in os.listdir(DEST_BASE_DIR):
+            if date_pattern.match(name) and os.path.isdir(os.path.join(DEST_BASE_DIR, name)):
+                dirs.append(name)
+    dirs.sort()
+    return dirs
 
 def run_ffmpeg_command(command):
     """Execute FFmpeg command and return success status"""
@@ -124,7 +133,7 @@ def process_directory(date_dir):
             print(f"Converting: {filename}")
             
             # Convert video file
-            ffmpeg_convert_command = f'ffmpeg -loglevel quiet -nostdin -i "{source_path}" -c:v libx264 -c:a aac -pix_fmt yuv420p -profile:v baseline -level 3 "{destination_path}" -n'
+            ffmpeg_convert_command = f'/opt/homebrew/bin/ffmpeg -loglevel quiet -nostdin -i "{source_path}" -c:v libx264 -c:a aac -pix_fmt yuv420p -profile:v baseline -level 3 "{destination_path}" -n'
             
             if run_ffmpeg_command(ffmpeg_convert_command):
                 print(f"✓ Conversion successful: {filename}")
@@ -144,7 +153,7 @@ def process_directory(date_dir):
                 midpoint = duration / 2 if duration > 0 else 1
                 
                 # Generate thumbnail
-                ffmpeg_thumbnail_command = f'ffmpeg -loglevel quiet -i "{destination_path}" -ss {midpoint} -vframes 1 "{thumbnail_path}" -y'
+                ffmpeg_thumbnail_command = f'/opt/homebrew/bin/ffmpeg -loglevel quiet -i "{destination_path}" -ss {midpoint} -vframes 1 "{thumbnail_path}" -y'
                 
                 if run_ffmpeg_command(ffmpeg_thumbnail_command):
                     print(f"✓ Thumbnail generated: {thumbnail_path}")
@@ -166,16 +175,9 @@ def scan_and_process():
     """Main function to scan directories and process files"""
     print("Starting directory scan...")
     
-    # Get date directories from past 3 months
-    past_dates = get_past_three_months_dates()
-    
-    # Check which date directories actually exist
-    existing_dirs = []
-    for date_str in past_dates:
-        date_dir_path = os.path.join(DEST_BASE_DIR, date_str)
-        if os.path.exists(date_dir_path):
-            existing_dirs.append(date_str)
-    
+    # Get all date directories
+    existing_dirs = get_all_date_dirs()
+
     print(f"Found {len(existing_dirs)} existing directories to process")
     
     # Process each directory
@@ -186,14 +188,20 @@ def scan_and_process():
 
 def main():
     """Main loop that runs every hour"""
+    # Register with monitoring system
+    monitor.register()
+
     while True:
         try:
+            # Send heartbeat at start of each cycle
+            monitor.send_heartbeat()
+
             scan_and_process()
         except Exception as e:
             print(f"Error during processing: {e}")
-        
+
         print("Sleeping for 1 hour...")
-        time.sleep(3600)  # Sleep for 1 hour
+        time.sleep(900)  # Sleep for 1 hour
 
 if __name__ == "__main__":
     main()
