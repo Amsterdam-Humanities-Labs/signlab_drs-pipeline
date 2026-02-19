@@ -38,7 +38,10 @@
       "Bash(git push:*)",
       "Bash(gh auth status:*)",
       "Bash(git remote set-url:*)",
-      "Bash(zip:*)"
+      "Bash(zip:*)",
+      "Bash(git pull:*)",
+      "Bash(kill:*)",
+      "Bash(pkill:*)"
     ],
     "deny": []
   }

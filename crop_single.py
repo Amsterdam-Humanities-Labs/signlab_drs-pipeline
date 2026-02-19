@@ -3,14 +3,13 @@ import cv2
 import mediapipe as mp
 import numpy as np
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 import json
 import subprocess
 import requests
 import tempfile
 import shutil
 import uuid
-import argparse
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 import sys
@@ -19,6 +18,19 @@ import math
 # Ensure output is flushed immediately to logs
 sys.stdout.reconfigure(line_buffering=True)
 sys.stderr.reconfigure(line_buffering=True)
+
+# ---- Configuration ----
+TARGET_FILES = [
+    "M20260217_4785.MP4",
+    "L20260217_6368.MP4",
+    "R20260217_9005.MP4",
+]
+DATE_FOLDER = "2026-02-17"
+BASE_DIR = Path("/Users/signlab/signCollect/AIHR-FGW-TEST-SIGNLAB (Projectfolder)/studioFiles")
+INPUT_FOLDER = BASE_DIR / DATE_FOLDER / "post_noncropped"
+OUTPUT_FOLDER = BASE_DIR / DATE_FOLDER / "post"
+TEMP_DIR = "/Users/signlab/drs/temp/"
+WORKERS = 5
 
 # ----- Orientation Detection Function -----
 
@@ -49,7 +61,7 @@ def get_video_orientation(filepath):
         print(f"Error determining orientation: {e}")
         return 0, "unknown"
 
-# ----- Processing Functions -----f
+# ----- Processing Functions -----
 
 def extract_frames(video_path, output_dir=None):
     """Extract frames from video and save to disk instead of memory"""
@@ -264,11 +276,6 @@ def process_frames(frame_paths, output_dir=None):
         cv2.imwrite(output_frame_path, processed_image)
         processed_paths.append(output_frame_path)
 
-        # For the first frame, save a debug image showing the final crop
-        # if idx == 0:
-        #     debug_path = os.path.join(output_dir, "debug_final_crop.jpg")
-        #     cv2.imwrite(debug_path, processed_image)
-
     return processed_paths, output_dir, head, waist, 50, output_dir
 
 def write_video(frame_paths, output_path, fps):
@@ -311,13 +318,10 @@ def reencode_with_ffmpeg(input_file, output_file=None):
     ]
 
     print(f"Re-encoding video with ffmpeg: {input_file}")
-    # subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-
     # print ffmpeg output
     print("FFmpeg output:")
     print(subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE).stdout.decode())
 
-    # sys.exit()
     if os.path.exists(output_file):
         print(f"Re-encoding successful: {output_file}")
         return output_file
@@ -382,9 +386,6 @@ def process_video_file(input_file, output_file, temp_dir=None):
 
         # Check video orientation before processing
         rotation, orientation = get_video_orientation(input_file)
-
-        # Skip file if larger than 300MB.
-        file_size = os.path.getsize(input_file)
 
         # Extract frames to disk
         frames_dir = os.path.join(temp_dir, "frames")
@@ -475,31 +476,25 @@ def cleanup_old_temp_files(temp_base_dir="/Users/signlab/drs/temp/", max_age_hou
     except Exception as e:
         print(f"Error during old temp files cleanup: {e}")
 
-def get_directory_size(path):
-    """Get total size of a directory in bytes"""
-    total_size = 0
-    try:
-        for dirpath, dirnames, filenames in os.walk(path):
-            for filename in filenames:
-                filepath = os.path.join(dirpath, filename)
-                if os.path.exists(filepath):
-                    total_size += os.path.getsize(filepath)
-    except Exception as e:
-        print(f"Error calculating directory size: {e}")
-    return total_size
-
 def cleanup_temp_by_size(temp_base_dir="/Users/signlab/drs/temp/", max_size_gb=10):
     """Clean up temp directory if it exceeds max_size_gb"""
     if not os.path.exists(temp_base_dir):
         return
 
     max_size_bytes = max_size_gb * 1024 * 1024 * 1024
-    current_size = get_directory_size(temp_base_dir)
+    current_size = 0
+    try:
+        for dirpath, dirnames, filenames in os.walk(temp_base_dir):
+            for filename in filenames:
+                filepath = os.path.join(dirpath, filename)
+                if os.path.exists(filepath):
+                    current_size += os.path.getsize(filepath)
+    except Exception:
+        return
 
     if current_size > max_size_bytes:
         print(f"Temp directory size ({current_size / (1024**3):.2f} GB) exceeds limit ({max_size_gb} GB). Cleaning up...")
 
-        # Get all directories with their modification times
         dirs_with_time = []
         try:
             for item in os.listdir(temp_base_dir):
@@ -508,15 +503,18 @@ def cleanup_temp_by_size(temp_base_dir="/Users/signlab/drs/temp/", max_size_gb=1
                     mtime = os.path.getmtime(item_path)
                     dirs_with_time.append((mtime, item_path))
 
-            # Sort by modification time (oldest first)
             dirs_with_time.sort()
 
-            # Remove oldest directories until size is under limit
             for _, dir_path in dirs_with_time:
                 if current_size <= max_size_bytes:
                     break
                 try:
-                    dir_size = get_directory_size(dir_path)
+                    dir_size = 0
+                    for dp, dn, fn in os.walk(dir_path):
+                        for f in fn:
+                            fp = os.path.join(dp, f)
+                            if os.path.exists(fp):
+                                dir_size += os.path.getsize(fp)
                     shutil.rmtree(dir_path)
                     current_size -= dir_size
                     print(f"Removed {dir_path} to free up space")
@@ -526,74 +524,40 @@ def cleanup_temp_by_size(temp_base_dir="/Users/signlab/drs/temp/", max_size_gb=1
         except Exception as e:
             print(f"Error during size-based cleanup: {e}")
 
-# ----- Single Directory Processing -----
-
-def get_files_from_dir(date_str, pattern="[LMR]202*.MP4"):
-    """Get files from a specific date folder's post_noncropped directory"""
-    base_dir = Path("/Users/signlab/signCollect/AIHR-FGW-TEST-SIGNLAB (Projectfolder)/studioFiles")
-
-    input_folder = base_dir / date_str / "post_noncropped"
-    output_folder = base_dir / date_str / "post"
-
-    if not input_folder.exists():
-        print(f"Input folder not found: {input_folder}")
-        return None, None, []
-
-    # Create output folder if it doesn't exist
-    output_folder.mkdir(parents=True, exist_ok=True)
-
-    # Get files matching pattern
-    files = list(input_folder.glob(pattern))
-    print(f"Found {len(files)} files matching '{pattern}' in {date_str}/post_noncropped")
-
-    return input_folder, output_folder, files
+# ----- Main -----
 
 def main():
-    parser = argparse.ArgumentParser(
-        description='Crop videos from a specific date folder using MediaPipe pose detection',
-        epilog='Example: python crop_single.py --date 2024-12-09'
-    )
-    parser.add_argument('-d', '--date', required=True,
-                        help='Date folder to process (YYYY-MM-DD format)')
-    parser.add_argument('-p', '--pattern', default='[LMR]202*.MP4',
-                        help='File pattern to match (default: [LMR]202*.MP4)')
-    parser.add_argument('-w', '--workers', type=int, default=5,
-                        help='Number of parallel workers (default: 5)')
-    args = parser.parse_args()
-
-    print(f"=== Crop Single Directory Script Started at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ===")
-    print(f"Target date: {args.date}")
-    print(f"Pattern: {args.pattern}")
-    print(f"Workers: {args.workers}")
+    print(f"=== crop_single.py started at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ===")
+    print(f"Target files: {TARGET_FILES}")
+    print(f"Date folder: {DATE_FOLDER}")
 
     # Clean up temp directory before starting
-    temp_dir = "/Users/signlab/drs/temp/"
-    if os.path.exists(temp_dir):
+    if os.path.exists(TEMP_DIR):
         print("Cleaning up temp directory before starting...")
-        cleanup_old_temp_files(temp_dir, max_age_hours=0)
-        cleanup_temp_by_size(temp_dir, max_size_gb=10)
+        cleanup_old_temp_files(TEMP_DIR, max_age_hours=0)
+        cleanup_temp_by_size(TEMP_DIR, max_size_gb=10)
     else:
-        os.makedirs(temp_dir, exist_ok=True)
+        os.makedirs(TEMP_DIR, exist_ok=True)
 
-    # Get files from the specified date
-    input_folder, output_folder, files = get_files_from_dir(args.date, args.pattern)
-
-    if input_folder is None:
-        print(f"Could not find input folder for {args.date}")
+    if not INPUT_FOLDER.exists():
+        print(f"Input folder not found: {INPUT_FOLDER}")
         return
 
-    if not files:
-        print(f"No files matching '{args.pattern}' found in {args.date}/post_noncropped")
-        return
+    # Create output folder if it doesn't exist
+    OUTPUT_FOLDER.mkdir(parents=True, exist_ok=True)
 
-    # Build task list
+    # Build task list from target files
+    date_yyyymmdd = DATE_FOLDER.replace("-", "")
     tasks = []
-    date_yyyymmdd = args.date.replace("-", "")
 
-    for file_path in sorted(files):
-        filename = file_path.name
-        input_file = str(file_path)
-        output_file = str(output_folder / filename)
+    for filename in TARGET_FILES:
+        input_file = str(INPUT_FOLDER / filename)
+
+        if not os.path.exists(input_file):
+            print(f"WARNING: {filename} not found in post_noncropped — skipping.")
+            continue
+
+        output_file = str(OUTPUT_FOLDER / filename)
 
         # Check for existing error JSON
         error_json_path = os.path.splitext(input_file)[0] + "_error.json"
@@ -604,26 +568,12 @@ def main():
         # Check for the _h264.mp4 version since that's the actual final output
         file_parts = os.path.splitext(filename)
         h264_filename = f"{file_parts[0]}_h264{file_parts[1]}"
-        h264_output_file = str(output_folder / h264_filename)
+        h264_output_file = str(OUTPUT_FOLDER / h264_filename)
         if os.path.exists(h264_output_file):
             print(f"Output file already exists for {h264_filename}. Skipping.")
             continue
 
-        # Check if the date in file matches the folder date
-        date_in_filename = filename[1:9]
-        if date_in_filename != date_yyyymmdd:
-            print(f"Date in filename {date_in_filename} does not match date in folder {date_yyyymmdd}; skipping.")
-            continue
-
-        first_char = filename[0].upper()
-        if first_char == 'L':
-            shift_direction = 'L'
-        elif first_char == 'R':
-            shift_direction = 'R'
-        else:
-            shift_direction = 'M'
-
-        tasks.append((input_file, output_file, shift_direction))
+        tasks.append((input_file, output_file))
 
     if not tasks:
         print("No files to process (all already processed or have errors).")
@@ -632,35 +582,30 @@ def main():
     print(f"Found {len(tasks)} files to process")
 
     # Process files with parallel workers
-    with ProcessPoolExecutor(max_workers=args.workers) as executor:
+    with ProcessPoolExecutor(max_workers=WORKERS) as executor:
         futures_to_temp_dirs = {}
 
-        # Create a unique temp directory for each task and submit
-        for task in tasks:
-            input_file, output_file, shift_direction = task
-            task_temp_dir = os.path.join("/Users/signlab/drs/temp/", f"task_{uuid.uuid4().hex}")
+        for input_file, output_file in tasks:
+            task_temp_dir = os.path.join(TEMP_DIR, f"task_{uuid.uuid4().hex}")
             os.makedirs(task_temp_dir, exist_ok=True)
 
-            # Submit task with temp directory
             future = executor.submit(process_video_file, input_file, output_file, task_temp_dir)
             futures_to_temp_dirs[future] = task_temp_dir
 
-        # Process completed futures
         for future in as_completed(futures_to_temp_dirs.keys()):
             try:
                 future.result()
             except Exception as e:
                 print(f"Task execution failed: {e}")
             finally:
-                # Extra cleanup in case the process_video_file didn't clean up
                 temp_dir = futures_to_temp_dirs[future]
                 if os.path.exists(temp_dir):
                     cleanup_temp_dirs([temp_dir])
 
     # Final cleanup
-    cleanup_old_temp_files("/Users/signlab/drs/temp/", max_age_hours=1)
+    cleanup_old_temp_files(TEMP_DIR, max_age_hours=1)
 
-    print(f"\n=== Crop Single Directory Script Completed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ===")
+    print(f"\n=== crop_single.py completed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ===")
 
 if __name__ == "__main__":
     main()

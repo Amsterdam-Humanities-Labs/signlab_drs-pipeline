@@ -33,6 +33,9 @@ setting_path = "/Users/signlab/drs/Settings.setting"
 # Batch limit - 50 files at a time
 BATCH_LIMIT = 50
 
+# Local temp directory for copying raw files before DaVinci processing
+temp_raw_dir = Path("/Users/signlab/drs/temp_raw")
+
 API_BASE_URL = "https://api.signcollect.nl/list/zin/videos"
 
 # ============================================================================
@@ -439,6 +442,31 @@ def process_batch(files_batch, post_noncropped_dir, batch_num, total_batches):
         if f.is_file():
             f.unlink()
 
+    # Copy raw files from rclone mount to local temp directory
+    print("Copying raw files to local temp directory...")
+    temp_raw_dir.mkdir(parents=True, exist_ok=True)
+    # Clean temp_raw before copying
+    for f in temp_raw_dir.glob("*"):
+        if f.is_file():
+            f.unlink()
+
+    local_files = []
+    for raw_file in files_batch:
+        local_path = temp_raw_dir / raw_file.name
+        try:
+            rsync_copy(raw_file, local_path)
+            local_files.append(local_path)
+            print(f"  Copied {raw_file.name} to local temp")
+        except OSError as e:
+            print(f"  Failed to copy {raw_file.name}: {e}")
+            create_skip_file(raw_file.name, post_noncropped_dir, f"Failed to copy from mount: {e}")
+
+    if not local_files:
+        print("No files were successfully copied to local temp. Skipping batch.")
+        return False
+
+    print(f"Copied {len(local_files)}/{len(files_batch)} files to local temp")
+
     # Open DaVinci Resolve
     print("Opening DaVinci Resolve...")
     resolve = get_resolve_with_retry()
@@ -451,7 +479,7 @@ def process_batch(files_batch, post_noncropped_dir, batch_num, total_batches):
     projectManager = resolve.GetProjectManager()
 
     project = queue_files_for_project(resolve, projectManager, "lala6",
-                                      files_batch, setting_path, post_noncropped_dir)
+                                      local_files, setting_path, post_noncropped_dir)
 
     if not project:
         print("Failed to queue files - project not loaded")
@@ -528,6 +556,12 @@ def process_batch(files_batch, post_noncropped_dir, batch_num, total_batches):
         for f in failed_files:
             if f in active_claims:
                 active_claims.remove(f)
+
+    # Clean up local temp files
+    print("Cleaning up local temp files...")
+    for f in temp_raw_dir.glob("*"):
+        if f.is_file():
+            f.unlink()
 
     # Force quit DaVinci Resolve to free memory
     print("Closing DaVinci Resolve to free memory...")
