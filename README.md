@@ -51,51 +51,55 @@ Imported by multiple scripts above. Do not run directly.
 |--------|-------------|
 | `startMonitor.py` | **PyQt5 studio monitoring dashboard.** Camera hardware monitoring (USB device detection), system process status, file status dashboard, media formatting controls, and WebSocket-based real-time updates. Located in this repo but typically launched from Desktop. |
 
-## Utility Scripts
+## `variants/` — Pipeline Variants
 
-One-off or manually-run tools for specific tasks. Not part of the continuous pipeline.
+Production variants of `batch.py` and `crop.py` for specific project types or processing modes. Not part of the continuous pipeline — invoked manually. All scripts insert the repo root into `sys.path` so they can import the shared libraries from root.
 
 ### Batch Variants
 | Script | Description |
 |--------|-------------|
-| `batch_queue.py` | Queue-based batch processing with file descriptor management and memory-safe DaVinci restart between batches. |
-| `batch_queue_api.py` | API-driven batch queue with multi-machine render coordination via `drs_render_client`. |
-| `batch_queue_single.py` | Processes a single batch of files through the queue pipeline. Takes CLI arguments. |
-| `batch_single.py` | Renders a hardcoded list of specific files through DaVinci Resolve. Edit `TARGET_FILES` before running. |
-| `batch_all_2026.py` | One-time batch job to process all 2026 raw files. Configured for a second machine (`gomer`). |
-| `batch_tyd.py` | DaVinci rendering for TYD (Thank You Deaf) project videos. |
-| `batch_tyd_landscape.py` | DaVinci rendering for TYD landscape-format videos. |
+| `variants/batch_queue.py` | Queue-based DaVinci batch processing. Raises fd limit, copies files to local `import/` before render, retries on EMFILE with smaller batch, and pauses cycles until keyboard/mouse idle 30+ min. |
+| `variants/batch_queue_api.py` | API-driven batch queue with multi-machine render coordination via `drs_render_client`. |
+| `variants/batch_queue_single.py` | Processes a single batch of files through the queue pipeline. Takes CLI arguments. |
+| `variants/batch_single.py` | Renders a hardcoded list of specific files through DaVinci Resolve. Edit `TARGET_FILES` before running. |
+| `variants/batch_all_2026.py` | One-time batch job to process all 2026 raw files. Configured for a second machine (`gomer`). |
+| `variants/batch_tyd.py` | DaVinci rendering for TYD (Thank You Deaf) project videos. |
+| `variants/batch_tyd_landscape.py` | DaVinci rendering for TYD landscape-format videos. |
 
 ### Crop Variants
 | Script | Description |
 |--------|-------------|
-| `crop_single.py` | Crops a hardcoded list of specific files. Edit target files before running. |
-| `crop_fix_request.py` | Batch re-crops videos using fixed dimensions derived from a reference video. |
-| `crop_landscape.py` | Cropping pipeline adapted for landscape-format videos. |
-| `crop_tyd.py` | Cropping pipeline for TYD project videos. |
-| `crop_znn.py` | Cropping variant for ZNN-style videos. Used by `cleanup_and_recrop.py`. |
+| `variants/crop_single.py` | Crops a hardcoded list of specific files. Edit target files before running. |
+| `variants/crop_landscape.py` | Cropping pipeline adapted for landscape-format videos. |
+| `variants/crop_tyd.py` | Cropping pipeline for TYD project videos. Uses YOLO in addition to MediaPipe. |
+
+## `tools/` — Utility Scripts
+
+One-off or manually-run tools for maintenance, reprocessing, and data recovery.
 
 ### Reprocessing & Maintenance
 | Script | Description |
 |--------|-------------|
-| `reprocess_all.py` | Reprocesses all videos from a JSON manifest with fixed 1440x1252 resolution. |
-| `reprocess_all_fixes.py` | Reprocesses videos from the crop-fixes API with updated 1:1.15 ratio. |
-| `reprocess_dimensions.py` | Reprocesses videos from `dimension_issues.json` that failed ratio checks. |
-| `reprocess_videos.py` | Re-processes specific videos with scaled dimensions from a reference video. |
-| `cleanup_and_recrop.py` | Deletes already-uploaded files, then re-crops preserved `post_noncropped` files. |
-| `regen_thumbnails.py` | Force reconverts videos from raw and regenerates thumbnails for specific dates. |
-| `rename_files.py` | Cleans up DaVinci Resolve filename suffixes in studioFiles directories. |
-| `upload_rendered.py` | Uploads rendered files from `post_noncropped` to the video API. |
-| `move_post_to_old.py` | Renames `post/` directories to `post_old/` for a date range. |
-| `check_studiofiles.py` | Audits studioFiles directory structure and reports inconsistencies. |
-| `decode_partial_qr.py` | Decodes QR codes with partially cut-off edges (e.g., monitor bezel cropping). |
+| `tools/reprocess_all.py` | Reprocesses all videos from a JSON manifest with fixed 1440x1252 resolution. |
+| `tools/reprocess_all_fixes.py` | Reprocesses videos from the crop-fixes API with updated 1:1.15 ratio. |
+| `tools/reprocess_dimensions.py` | Reprocesses videos from `dimension_issues.json` that failed ratio checks. |
+| `tools/reprocess_videos.py` | Re-processes specific videos with scaled dimensions from a reference video. |
+| `tools/cleanup_and_recrop.py` | Deletes already-uploaded files, then re-crops preserved `post_noncropped` files via `crop_znn`. |
+| `tools/crop_znn.py` | Cropping variant used as a library by `cleanup_and_recrop.py`. |
+| `tools/crop_fix_request.py` | Crop fix helper used as a library by `reprocess_videos.py`. |
+| `tools/regen_thumbnails.py` | Force reconverts videos from raw and regenerates thumbnails for specific dates. |
+| `tools/rename_files.py` | Cleans up DaVinci Resolve filename suffixes in studioFiles directories. |
+| `tools/upload_rendered.py` | Uploads rendered files from `post_noncropped` to the video API. |
+| `tools/move_post_to_old.py` | Renames `post/` directories to `post_old/` for a date range. |
+| `tools/check_studiofiles.py` | Audits studioFiles directory structure and reports inconsistencies. |
+| `tools/decode_partial_qr.py` | Decodes QR codes with partially cut-off edges (e.g., monitor bezel cropping). |
 
 ### Camera & WebSocket Tools
 | Script | Description |
 |--------|-------------|
-| `camera_download_controller.py` | Automates camera download flow: reconnects cameras, triggers content mode, waits for file events, and starts downloads. |
-| `websocket_listener.py` | Async WebSocket listener that logs all messages from `startServer_beta.js`. |
-| `websocket_listener_simple.py` | Synchronous WebSocket listener using `websocket-client`. Simpler alternative. |
+| `tools/camera_download_controller.py` | Automates camera download flow: reconnects cameras, triggers content mode, waits for file events, and starts downloads. |
+| `tools/websocket_listener.py` | Async WebSocket listener that logs all messages from `startServer_beta.js`. |
+| `tools/websocket_listener_simple.py` | Synchronous WebSocket listener using `websocket-client`. Simpler alternative. |
 
 ## Configuration Files
 
@@ -109,13 +113,15 @@ One-off or manually-run tools for specific tasks. Not part of the continuous pip
 
 ```
 drs/
+├── variants/        # Batch/crop variants for specific project types
+├── tools/           # One-off maintenance and reprocessing utilities
+├── test/            # Unit and integration tests
+├── old/             # Archived backup scripts
 ├── import/          # Video capture staging area (incoming from cameras)
 ├── export/          # DaVinci Resolve render output
 ├── temp/            # Temporary processing files
 ├── qr/              # QR code scanner service and assets
 ├── logs/            # Per-service log files (auto-rotated at 10MB)
-├── old/             # Archived backup scripts
-├── test/            # Unit and integration tests
 ├── sc/              # Secondary Python environment
 └── node_modules/    # Node.js dependencies
 ```
