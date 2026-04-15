@@ -5,8 +5,9 @@ from unittest.mock import patch, MagicMock, mock_open, call
 import os
 import sys
 
-# Add the parent directory to the path to import batch
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+# Add services/ so we can import batch, and shared/ for its transitive deps
+sys.path.insert(0, '/Users/signlab/drs/services')
+sys.path.insert(0, '/Users/signlab/drs/shared')
 
 # Mock the problematic imports before importing batch
 with patch.dict('sys.modules', {

@@ -15,6 +15,7 @@ from pathlib import Path
 import sys
 import math
 import glob
+sys.path.insert(0, '/Users/signlab/drs/shared')
 from signcollect_monitor import SignCollectMonitor  # Import the monitor client
 
 # Ensure output is flushed immediately to logs

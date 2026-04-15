@@ -4,6 +4,7 @@ Adapted paths for /Users/gomer machine.
 """
 import os, sys, time, json, subprocess
 from datetime import datetime
+sys.path.insert(0, '/Users/signlab/drs/shared')
 from python_get_resolve import GetResolve
 from pathlib import Path
 

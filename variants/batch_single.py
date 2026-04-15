@@ -1,6 +1,7 @@
 import os, sys, time, json, subprocess, re, gc
 from datetime import datetime
-sys.path.insert(0, '/Users/signlab/drs')
+sys.path.insert(0, '/Users/signlab/drs/services')
+sys.path.insert(0, '/Users/signlab/drs/shared')
 from python_get_resolve import GetResolve
 from pathlib import Path
 from video_api_client import VideoAPIClient
@@ -21,8 +22,8 @@ RAW_DIR = BASE_DIR / DATE_FOLDER / "raw"
 POST_DIR = BASE_DIR / DATE_FOLDER / "post_noncropped"
 IMPORT_DIR = Path("/Users/signlab/drs/import")
 EXPORT_DIR = Path("/Users/signlab/drs/export")
-SETTING_PATH = "/Users/signlab/drs/Settings.setting"
-LANDSCAPE_SETTING_PATH = "/Users/signlab/drs/landscape.setting"
+SETTING_PATH = "/Users/signlab/drs/config/Settings.setting"
+LANDSCAPE_SETTING_PATH = "/Users/signlab/drs/config/landscape.setting"
 
 
 def clean_rendered_filename(filename):

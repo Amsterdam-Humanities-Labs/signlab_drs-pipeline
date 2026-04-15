@@ -9,7 +9,7 @@ const { exec } = require('child_process'); // Import exec from child_process
 const https = require('https');
 const axios = require('axios');
 const FormData = require('form-data');
-const { SignCollectMonitor } = require('./signcollect_monitor.js');
+const { SignCollectMonitor } = require('../shared/signcollect_monitor.js');
 
 // Initialize the monitor
 const monitor = new SignCollectMonitor(

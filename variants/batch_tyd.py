@@ -1,6 +1,7 @@
 import os, sys, glob, shutil, time, json, subprocess
 from datetime import datetime
-sys.path.insert(0, '/Users/signlab/drs')
+sys.path.insert(0, '/Users/signlab/drs/services')
+sys.path.insert(0, '/Users/signlab/drs/shared')
 from python_get_resolve import GetResolve
 from pathlib import Path
 from video_api_client import VideoAPIClient  # Import the API client
@@ -77,7 +78,7 @@ def main():
     base_dir = Path("/Users/signlab/signCollect/AIHR-FGW-TEST-SIGNLAB (Projectfolder)/studioFiles")
     import_dir = homedir / "drs/import"
     export_dir = homedir / "drs/export"
-    setting_path = homedir / "drs/tyd.setting"
+    setting_path = homedir / "drs/config/tyd.setting"
     setting_path = str(setting_path)
 
     print(import_dir)

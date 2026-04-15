@@ -3,7 +3,7 @@ import sys
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
-sys.path.insert(0, '/Users/signlab/drs')
+sys.path.insert(0, '/Users/signlab/drs/shared')
 from video_api_client import VideoAPIClient
 
 # Ensure output is flushed immediately to logs

@@ -4,9 +4,11 @@ import unittest
 import tempfile
 import os
 import signal
+import sys
 import time
 import subprocess
 from unittest.mock import Mock, patch, MagicMock, call, mock_open
+sys.path.insert(0, '/Users/signlab/drs')
 from startupScript import ProcessMonitor, signal_handler, create_watchdog_script
 
 
@@ -330,7 +332,7 @@ class TestWatchdogScript(unittest.TestCase):
         create_watchdog_script()
         
         # Verify file was opened for writing
-        mock_open.assert_called_once_with('/Users/signlab/drs/watchdog.sh', 'w')
+        mock_open.assert_called_once_with('/Users/signlab/drs/scripts/watchdog.sh', 'w')
         
         # Verify content was written
         mock_file.write.assert_called_once()
@@ -339,7 +341,7 @@ class TestWatchdogScript(unittest.TestCase):
         self.assertIn('/Users/signlab/drs/startupScript.py', written_content)
         
         # Verify file permissions were set
-        mock_chmod.assert_called_once_with('/Users/signlab/drs/watchdog.sh', 0o755)
+        mock_chmod.assert_called_once_with('/Users/signlab/drs/scripts/watchdog.sh', 0o755)
         
     @patch('startupScript.os.chmod')
     @patch('builtins.open')
@@ -351,7 +353,7 @@ class TestWatchdogScript(unittest.TestCase):
         create_watchdog_script()
         
         # Verify file opening was attempted
-        mock_open.assert_called_once_with('/Users/signlab/drs/watchdog.sh', 'w')
+        mock_open.assert_called_once_with('/Users/signlab/drs/scripts/watchdog.sh', 'w')
         
         # Verify chmod was not called due to exception
         mock_chmod.assert_not_called()
@@ -372,7 +374,7 @@ class TestMainExecution(unittest.TestCase):
         with patch('startupScript.os.chmod') as mock_chmod:
             with patch('builtins.open', mock_open()) as mock_file:
                 create_watchdog_script()
-                mock_file.assert_called_once_with('/Users/signlab/drs/watchdog.sh', 'w')
+                mock_file.assert_called_once_with('/Users/signlab/drs/scripts/watchdog.sh', 'w')
                 mock_chmod.assert_called_once()
         
         # Test signal handler import

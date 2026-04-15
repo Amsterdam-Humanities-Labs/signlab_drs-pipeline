@@ -1,10 +1,12 @@
 import os
 import re
+import sys
 import json
 import time
 import requests
 from datetime import datetime
 from collections import Counter
+sys.path.insert(0, '/Users/signlab/drs/shared')
 from signcollect_monitor import SignCollectMonitor  # Import the monitor client
 
 # Initialize the monitor

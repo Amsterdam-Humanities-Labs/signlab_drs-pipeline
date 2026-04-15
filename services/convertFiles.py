@@ -1,4 +1,5 @@
 import os
+import sys
 import subprocess
 import requests
 import re
@@ -6,6 +7,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 import json
 import time
+sys.path.insert(0, '/Users/signlab/drs/shared')
 from signcollect_monitor import SignCollectMonitor  # Import the monitor client
 
 # Initialize the monitor

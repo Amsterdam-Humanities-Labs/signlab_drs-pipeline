@@ -1,10 +1,12 @@
 import os
 import re
+import sys
 import time
 import json
 import threading
 import subprocess
 from pathlib import Path
+sys.path.insert(0, '/Users/signlab/drs/shared')
 from signcollect_monitor import SignCollectMonitor  # Import the monitor client
 
 # Initialize the monitor

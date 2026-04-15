@@ -17,7 +17,8 @@ from datetime import datetime
 from concurrent.futures import ProcessPoolExecutor, as_completed
 import uuid
 
-sys.path.insert(0, '/Users/signlab/drs')
+sys.path.insert(0, '/Users/signlab/drs/shared')
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # for crop_znn in tools/
 from crop_znn import process_video_file, cleanup_temp_dirs
 
 BASE_DIR = '/Users/signlab/signCollect/AIHR-FGW-TEST-SIGNLAB (Projectfolder)/studioFiles'

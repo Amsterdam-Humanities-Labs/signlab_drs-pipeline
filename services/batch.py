@@ -1,5 +1,6 @@
 import os, sys, glob, shutil, time, json, subprocess, re, gc
 from datetime import datetime, timedelta
+sys.path.insert(0, '/Users/signlab/drs/shared')
 from python_get_resolve import GetResolve
 from pathlib import Path
 from video_api_client import VideoAPIClient  # Import the API client
@@ -400,9 +401,9 @@ def main():
     base_dir = Path("/Users/signlab/signCollect/AIHR-FGW-TEST-SIGNLAB (Projectfolder)/studioFiles")
     import_dir = homedir / "drs/import"
     export_dir = homedir / "drs/export"
-    setting_path = homedir / "drs/Settings.setting"
+    setting_path = homedir / "drs/config/Settings.setting"
     setting_path = str(setting_path)
-    landscape_setting_path = homedir / "drs/landscape.setting"
+    landscape_setting_path = homedir / "drs/config/landscape.setting"
     landscape_setting_path = str(landscape_setting_path)
 
     print(import_dir)

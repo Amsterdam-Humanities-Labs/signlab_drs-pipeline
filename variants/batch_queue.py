@@ -1,6 +1,7 @@
 import os, sys, glob, shutil, time, json, subprocess, resource
 from datetime import datetime
-sys.path.insert(0, '/Users/signlab/drs')
+sys.path.insert(0, '/Users/signlab/drs/services')
+sys.path.insert(0, '/Users/signlab/drs/shared')
 from python_get_resolve import GetResolve
 from pathlib import Path
 from video_api_client import VideoAPIClient  # Import the API client
@@ -29,7 +30,7 @@ monitor = SignCollectMonitor(
 # Path constants
 BASE_DIR = Path("/Users/signlab/signCollect/AIHR-FGW-TEST-SIGNLAB (Projectfolder)/studioFiles")
 export_dir = Path("/Users/signlab/drs/export")
-setting_path = "/Users/signlab/drs/Settings.setting"  # lala6 project
+setting_path = "/Users/signlab/drs/config/Settings.setting"  # lala6 project
 
 # Batch limit to prevent DaVinci memory issues
 BATCH_LIMIT = 50

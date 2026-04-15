@@ -7,7 +7,8 @@ import sys
 import uuid
 import shutil
 
-sys.path.insert(0, '/Users/signlab/drs')
+sys.path.insert(0, '/Users/signlab/drs/services')
+sys.path.insert(0, '/Users/signlab/drs/shared')
 from crop import extract_frames, process_frames, write_video, reencode_with_ffmpeg
 
 BASE_DIR = '/Users/signlab/signCollect/AIHR-FGW-TEST-SIGNLAB (Projectfolder)/studioFiles'

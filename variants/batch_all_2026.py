@@ -8,7 +8,8 @@ Batch process all 2026 raw files through DaVinci Resolve.
 """
 import os, sys, glob, shutil, time, json, subprocess, re
 from datetime import datetime
-sys.path.insert(0, '/Users/signlab/drs')
+sys.path.insert(0, '/Users/signlab/drs/services')
+sys.path.insert(0, '/Users/signlab/drs/shared')
 from python_get_resolve import GetResolve
 from pathlib import Path
 from drs_render_client import DRSRenderClient
@@ -20,8 +21,8 @@ sys.stderr.reconfigure(line_buffering=True)
 BASE_DIR = Path("/Users/gomer/surfnl/AIHR-FGW-TEST-SIGNLAB (Projectfolder)/studioFiles")
 IMPORT_DIR = Path("/Users/gomer/drs-tools/import")
 EXPORT_DIR = Path("/Users/gomer/drs-tools/export")
-SETTING_PATH = "/Users/gomer/drs-tools/Settings.setting"
-LANDSCAPE_SETTING_PATH = "/Users/gomer/drs-tools/landscape.setting"
+SETTING_PATH = "/Users/gomer/drs-tools/config/Settings.setting"
+LANDSCAPE_SETTING_PATH = "/Users/gomer/drs-tools/config/landscape.setting"
 
 BATCH_SIZE = 50  # Files per DaVinci session
 YEAR = "2026"

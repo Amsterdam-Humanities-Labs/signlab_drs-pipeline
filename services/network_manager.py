@@ -11,6 +11,7 @@ import os
 import socket
 import argparse
 from datetime import datetime
+sys.path.insert(0, '/Users/signlab/drs/shared')
 from signcollect_monitor import SignCollectMonitor  # Import the monitor client
 
 # Initialize the monitor

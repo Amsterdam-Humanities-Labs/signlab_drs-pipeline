@@ -14,8 +14,10 @@ All videos will have the person at the same visual size as the reference.
 import os
 import sys
 
-# Add the drs directory to path to import from crop_fix
-sys.path.insert(0, '/Users/signlab/drs')
+# Add the services and shared directories to path
+sys.path.insert(0, '/Users/signlab/drs/services')
+sys.path.insert(0, '/Users/signlab/drs/shared')
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # for crop_fix_request in tools/
 
 from crop_fix_request import (
     get_reference_dimensions,

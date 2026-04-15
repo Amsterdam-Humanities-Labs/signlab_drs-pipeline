@@ -43,37 +43,37 @@ class ProcessMonitor:
         self.services = [
             {
                 'name': 'mouse',
-                'command': ['/usr/bin/python3', '/Users/signlab/drs/mouse.py'],
+                'command': ['/usr/bin/python3', '/Users/signlab/drs/services/mouse.py'],
                 'cwd': '/Users/signlab/drs'
             },
             {
                 'name': 'keyboardMonitor',
-                'command': ['/usr/bin/python3', '/Users/signlab/drs/keyboard_monitor.py'],
+                'command': ['/usr/bin/python3', '/Users/signlab/drs/services/keyboard_monitor.py'],
                 'cwd': '/Users/signlab/drs'
             },
             {
                 'name': 'moveFiles',
-                'command': ['/usr/bin/python3', '/Users/signlab/drs/moveFiles.py'],
+                'command': ['/usr/bin/python3', '/Users/signlab/drs/services/moveFiles.py'],
                 'cwd': '/Users/signlab/drs'
             },
             {
                 'name': 'batch',
-                'command': ['/usr/bin/python3', '/Users/signlab/drs/batch.py'],
+                'command': ['/usr/bin/python3', '/Users/signlab/drs/services/batch.py'],
                 'cwd': '/Users/signlab/drs'
             },
             {
                 'name': 'crop',
-                'command': ['/usr/bin/python3', '/Users/signlab/drs/crop.py'],
+                'command': ['/usr/bin/python3', '/Users/signlab/drs/services/crop.py'],
                 'cwd': '/Users/signlab/drs'
             },
             {
                 'name': 'server',
-                'command': ['/opt/homebrew/bin/node', '/Users/signlab/drs/startServer_beta.js'],
+                'command': ['/opt/homebrew/bin/node', '/Users/signlab/drs/services/startServer_beta.js'],
                 'cwd': '/Users/signlab/drs'
             },
                 {
                 'name': 'convertFiles',
-                'command': ['/usr/bin/python3', '/Users/signlab/drs/convertFiles.py'],
+                'command': ['/usr/bin/python3', '/Users/signlab/drs/services/convertFiles.py'],
                 'cwd': '/Users/signlab/drs'
             },
             {
@@ -97,17 +97,17 @@ class ProcessMonitor:
             },
             {
                    'name': 'listFiles',
-                'command': ['/usr/bin/python3', '/Users/signlab/drs/listFiles.py'],
+                'command': ['/usr/bin/python3', '/Users/signlab/drs/services/listFiles.py'],
                 'cwd': '/Users/signlab/drs'
             },
             {
                 'name': 'networkManager',
-                'command': ['/usr/bin/python3', '/Users/signlab/drs/network_manager.py'],
+                'command': ['/usr/bin/python3', '/Users/signlab/drs/services/network_manager.py'],
                 'cwd': '/Users/signlab/drs'
             },
             {
                 'name': 'watchdog',
-                'command': ['/bin/bash', '/Users/signlab/drs/watchdog.sh'],
+                'command': ['/bin/bash', '/Users/signlab/drs/scripts/watchdog.sh'],
                 'cwd': '/Users/signlab/drs'
             },
             {
@@ -547,7 +547,7 @@ while true; do
 done
 '''
     
-    watchdog_path = '/Users/signlab/drs/watchdog.sh'
+    watchdog_path = '/Users/signlab/drs/scripts/watchdog.sh'
     try:
         with open(watchdog_path, 'w') as f:
             f.write(watchdog_content)

@@ -1,6 +1,7 @@
 """Test fixed 1440x1252 output on 3 specific videos"""
 import os, sys, uuid, shutil, subprocess
-sys.path.insert(0, '/Users/signlab/drs')
+sys.path.insert(0, '/Users/signlab/drs/services')
+sys.path.insert(0, '/Users/signlab/drs/shared')
 from crop import extract_frames, process_frames, write_video, reencode_with_ffmpeg
 import cv2
 
