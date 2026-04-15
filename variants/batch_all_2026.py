@@ -8,6 +8,7 @@ Batch process all 2026 raw files through DaVinci Resolve.
 """
 import os, sys, glob, shutil, time, json, subprocess, re
 from datetime import datetime
+sys.path.insert(0, '/Users/signlab/drs')
 from python_get_resolve import GetResolve
 from pathlib import Path
 from drs_render_client import DRSRenderClient

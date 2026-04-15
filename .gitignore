@@ -16,6 +16,9 @@ include/
 pyvenv.cfg
 sc/
 
+# Scratch space for local debris (videos, debug images, stale logs)
+scratch/
+
 # Logs
 logs/
 *.log

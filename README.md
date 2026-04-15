@@ -116,7 +116,9 @@ drs/
 ├── variants/        # Batch/crop variants for specific project types
 ├── tools/           # One-off maintenance and reprocessing utilities
 ├── test/            # Unit and integration tests
-├── old/             # Archived backup scripts
+├── old/             # Archived backup scripts and DaVinci project dumps
+├── docs/            # Reference docs and server-side PHP/HTML files
+├── scratch/         # Local debug images, test videos, stale logs (gitignored)
 ├── import/          # Video capture staging area (incoming from cameras)
 ├── export/          # DaVinci Resolve render output
 ├── temp/            # Temporary processing files

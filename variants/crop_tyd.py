@@ -14,6 +14,7 @@ from pathlib import Path
 import sys
 import math
 from ultralytics import YOLO  # Add import for YOLO
+sys.path.insert(0, '/Users/signlab/drs')
 from video_api_client import VideoAPIClient  # Import the API client
 
 # Global variables to store pose detection results from first frame

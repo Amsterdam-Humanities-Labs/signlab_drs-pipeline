@@ -18,6 +18,7 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 sys.stdout.reconfigure(line_buffering=True)
 sys.stderr.reconfigure(line_buffering=True)
 
+sys.path.insert(0, '/Users/signlab/drs')
 from crop_fix import process_video_file, cleanup_temp_dirs, cleanup_old_temp_files, cleanup_temp_by_size
 
 BASE_DIR = Path("/Users/signlab/signCollect/AIHR-FGW-TEST-SIGNLAB (Projectfolder)/studioFiles")

@@ -1,5 +1,6 @@
 import os, sys, glob, shutil, time, json, subprocess, resource
 from datetime import datetime
+sys.path.insert(0, '/Users/signlab/drs')
 from python_get_resolve import GetResolve
 from pathlib import Path
 from video_api_client import VideoAPIClient  # Import the API client
