@@ -270,33 +270,35 @@ def save_debug_bbox_frame(frame_path, head, waist, margin, output_path, midpoint
 
     print(f"Debug bounding box frame saved as {output_path}")
 
-def process_frames(frame_paths, output_dir=None):
+def process_frames(frame_paths, output_dir=None, oob=None):
     """
     Process frames saved on disk with hand detection and automatic boundary expansion.
     Skips first 30 and last 60 frames to avoid resting poses.
+
+    oob: dict with keys top/left/right/bottom (bool). Only expand on sides marked True.
     """
+    if oob is None:
+        oob = {"top": True, "left": True, "right": True, "bottom": False}
     if output_dir is None:
         output_dir = os.path.join(tempfile.gettempdir(), f"processed_{uuid.uuid4().hex}")
         os.makedirs(output_dir, exist_ok=True)
 
     # Process the first frame to get vertical bounds and midpoint
     first_frame_path = frame_paths[0]
-    head, waist, frame_shape, midpoint_x, left_shoulder_x, left_shoulder_y, right_shoulder_x, right_shoulder_y, head_x, nose_x, nose_y = get_vertical_bbox(first_frame_path)
+    head, waist, frame_shape, midpoint_x, left_shoulder_x, right_shoulder_x, left_shoulder_y, right_shoulder_y, head_x, nose_x, nose_y = get_vertical_bbox(first_frame_path)
 
     # Check if pose was detected
     if midpoint_x is None:
         raise ValueError("No pose landmarks detected in video - cannot process")
 
-    # Detect hand landmarks, skipping first 30 and last 60 frames to avoid resting pose
-    skip_start = 30
-    skip_end = 60
+    # Detect hand landmarks, skipping first and last 30 frames to avoid resting pose
+    skip_frames = 30
     total_frames = len(frame_paths)
 
-    # Only apply skipping if we have enough frames
-    if total_frames > (skip_start + skip_end + 10):
-        frames_to_analyze = frame_paths[skip_start:-skip_end]
-        frame_offset = skip_start
-        print(f"Detecting hand landmarks on frames {skip_start} to {total_frames - skip_end} (skipping resting pose)...")
+    if total_frames > (skip_frames * 2 + 10):
+        frames_to_analyze = frame_paths[skip_frames:-skip_frames]
+        frame_offset = skip_frames
+        print(f"Detecting hand landmarks on frames {skip_frames} to {total_frames - skip_frames} (skipping resting pose)...")
     else:
         frames_to_analyze = frame_paths
         frame_offset = 0
@@ -360,38 +362,23 @@ def process_frames(frame_paths, output_dir=None):
 
     print(f"Applied rotation to {len(rotated_hand_landmarks)} hand landmarks")
 
-    # Calculate initial crop boundaries based on pose
-    crop_width = 1440
-    half_crop = crop_width // 2
+    # Calculate initial crop boundaries based on BODY (shoulders), not hardcoded 1440
+    # This allows hand landmarks to genuinely expand the crop beyond the body,
+    # so the final resize to 1440x1252 zooms out the person to fit hands.
     current_width = first_framee.shape[1]
-    target_height = waist - head
-    target_width = int(target_height * 1.15)
+    shoulder_margin = 100  # Small margin around shoulders for the body-only bounds
+    body_left = max(0, int(min(left_shoulder_x, right_shoulder_x)) - shoulder_margin)
+    body_right = min(current_width, int(max(left_shoulder_x, right_shoulder_x)) + shoulder_margin)
 
-    # Calculate initial left and right boundaries
-    initial_left = max(0, midpoint_x - half_crop)
-    initial_right = min(current_width, initial_left + crop_width)
-
-    if initial_right == current_width:
-        initial_left = max(0, current_width - crop_width)
-
-    if initial_right - initial_left < target_width:
-        initial_left = max(0, midpoint_x - target_width // 2)
-        initial_right = min(current_width, initial_left + target_width)
-
-    if initial_left == 0:
-        initial_right = midpoint_x + (midpoint_x - initial_left) - 50
-    if initial_right == current_width:
-        initial_left = midpoint_x - (initial_right - midpoint_x) + 50
-
-    # Create initial bounds dictionary
+    # Create initial bounds dictionary based on body
     initial_bounds = {
         'top': head,
         'bottom': waist,
-        'left': initial_left,
-        'right': initial_right
+        'left': body_left,
+        'right': body_right
     }
 
-    print(f"Initial crop bounds - Top: {head}, Bottom: {waist}, Left: {initial_left}, Right: {initial_right}")
+    print(f"Initial crop bounds (body) - Top: {head}, Bottom: {waist}, Left: {body_left}, Right: {body_right}")
 
     # Calculate expanded bounds using ROTATED hand landmarks
     expanded_bounds = calculate_boundary_expansion(
@@ -404,8 +391,18 @@ def process_frames(frame_paths, output_dir=None):
     print(f"Expanded crop bounds - Top: {expanded_bounds['top']}, Bottom: {expanded_bounds['bottom']}, "
           f"Left: {expanded_bounds['left']}, Right: {expanded_bounds['right']}")
 
-    # Anchor bottom to waist - hand OOB is mostly top/left/right, rarely bottom
-    expanded_bounds['bottom'] = initial_bounds['bottom']  # = waist
+    # Only expand on sides flagged in oob; keep initial bounds for unflagged sides
+    if not oob.get('top', True):
+        expanded_bounds['top'] = initial_bounds['top']
+    if not oob.get('left', True):
+        expanded_bounds['left'] = initial_bounds['left']
+    if not oob.get('right', True):
+        expanded_bounds['right'] = initial_bounds['right']
+    if not oob.get('bottom', False):
+        expanded_bounds['bottom'] = initial_bounds['bottom']  # = waist
+
+    print(f"OOB-filtered bounds - Top: {expanded_bounds['top']}, Bottom: {expanded_bounds['bottom']}, "
+          f"Left: {expanded_bounds['left']}, Right: {expanded_bounds['right']} (oob: {oob})")
 
     # Enforce 1:1.15 aspect ratio (height:width = 1:1.15)
     frame_width = first_framee.shape[1]
@@ -581,6 +578,11 @@ def process_frames(frame_paths, output_dir=None):
                 borderType=cv2.BORDER_REPLICATE
             )
 
+        # Resize to fixed output resolution: 1440 x 1252 (ratio ~1.15)
+        OUTPUT_WIDTH = 1440
+        OUTPUT_HEIGHT = 1252
+        processed_image = cv2.resize(processed_image, (OUTPUT_WIDTH, OUTPUT_HEIGHT), interpolation=cv2.INTER_LANCZOS4)
+
         # Save the processed frame
         output_frame_path = os.path.join(output_dir, f"processed_{idx:06d}.jpg")
         cv2.imwrite(output_frame_path, processed_image)
@@ -688,9 +690,12 @@ def save_error_json(video_path, error_message, error_type="processing_error"):
     except Exception as e:
         print(f"Failed to save error JSON: {str(e)}")
 
-def process_video_file(input_file, output_file, temp_dir=None):
+def process_video_file(input_file, output_file, temp_dir=None, oob=None):
+    if oob is None:
+        oob = {"top": True, "left": True, "right": True, "bottom": False}
     try:
         print(f"Processing file: {input_file}")
+        print(f"OOB sides to fix: {oob}")
 
         # Create a unique temp directory for this task if not provided
         if temp_dir is None:
@@ -723,7 +728,7 @@ def process_video_file(input_file, output_file, temp_dir=None):
         debug_dir = os.path.join(temp_dir, "debug")
         os.makedirs(debug_dir, exist_ok=True)
 
-        processed_paths, _, head, waist, margin, _ = process_frames(frame_paths, processed_dir)
+        processed_paths, _, head, waist, margin, _ = process_frames(frame_paths, processed_dir, oob)
 
         # Write video from processed frames on disk
         write_video(processed_paths, output_file, fps)
@@ -849,10 +854,10 @@ def cleanup_temp_by_size(temp_base_dir="/Users/signlab/drs/temp/", max_size_gb=1
 def fetch_unresolved_fixes():
     """Fetch unresolved video fixes from API.
 
-    Returns a flat list of unresolved file entries, each containing:
+    Returns a list of fix groups, each containing:
     - m_file: parent identifier for API calls
-    - file: specific filename to process
-    - type: file type (m_file, l_file, r_file)
+    - oob: dict with top/left/right/bottom booleans
+    - files: list of unresolved file entries [{file, type}, ...]
     """
     api_url = "https://signcollect.nl/videoFix/crop_fixes.json"
 
@@ -862,22 +867,28 @@ def fetch_unresolved_fixes():
         response.raise_for_status()
         data = response.json()
 
-        # Extract individual unresolved files from the files array
-        unresolved_files = []
+        fix_groups = []
         for fix in data.get("fixes", []):
             m_file = fix.get("m_file")
+            oob = fix.get("oob", {"top": True, "left": True, "right": True, "bottom": False})
             files_array = fix.get("files", [])
 
-            for file_entry in files_array:
-                if file_entry.get("status") == "unresolved" and file_entry.get("resolved_at") is None:
-                    unresolved_files.append({
-                        "m_file": m_file,           # Parent identifier for API
-                        "file": file_entry.get("file"),
-                        "type": file_entry.get("type"),
-                    })
+            unresolved = [
+                {"file": fe.get("file"), "type": fe.get("type")}
+                for fe in files_array
+                if fe.get("status") == "unresolved" and fe.get("resolved_at") is None
+            ]
 
-        print(f"Found {len(unresolved_files)} unresolved file(s)")
-        return unresolved_files
+            if unresolved:
+                fix_groups.append({
+                    "m_file": m_file,
+                    "oob": oob,
+                    "files": unresolved,
+                })
+
+        total_files = sum(len(g["files"]) for g in fix_groups)
+        print(f"Found {len(fix_groups)} fix group(s) ({total_files} files)")
+        return fix_groups
     except Exception as e:
         print(f"Failed to fetch fixes: {e}")
         return []
@@ -1010,7 +1021,7 @@ def process_fix_tasks(tasks, temp_base):
     """Process fix tasks with parallel execution.
 
     Args:
-        tasks: List of tuples (input_file, output_file, m_file_parent, file_name)
+        tasks: List of tuples (input_file, output_file, m_file_parent, file_name, oob)
         temp_base: Base directory for temporary files
     """
     if not tasks:
@@ -1021,7 +1032,7 @@ def process_fix_tasks(tasks, temp_base):
     with ProcessPoolExecutor(max_workers=5) as executor:
         futures_to_tasks = {}
 
-        for input_file, output_file, m_file_parent, file_name in tasks:
+        for input_file, output_file, m_file_parent, file_name, oob in tasks:
             task_temp_dir = os.path.join(temp_base, f"fix_{uuid.uuid4().hex}")
             os.makedirs(task_temp_dir, exist_ok=True)
 
@@ -1029,7 +1040,8 @@ def process_fix_tasks(tasks, temp_base):
                 process_video_file,
                 input_file,
                 output_file,
-                task_temp_dir
+                task_temp_dir,
+                oob
             )
             futures_to_tasks[future] = (input_file, output_file, m_file_parent, file_name, task_temp_dir)
 
@@ -1057,7 +1069,9 @@ def process_fix_tasks(tasks, temp_base):
                     cleanup_temp_dirs([temp_dir])
 
 def main_fix_mode(loop=False, interval_minutes=60):
-    """Process unresolved video fixes from API."""
+    """Process unresolved video fixes from API.
+    Processes each fix group (M/L/R) immediately instead of building a full list first.
+    """
     # Register with monitoring system
     crop_fix_monitor.register()
 
@@ -1072,49 +1086,42 @@ def main_fix_mode(loop=False, interval_minutes=60):
         print(f"FIX MODE - Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         print("="*70 + "\n")
 
-        # Fetch unresolved fixes
-        unresolved_fixes = fetch_unresolved_fixes()
+        # Fetch unresolved fix groups
+        fix_groups = fetch_unresolved_fixes()
 
-        if not unresolved_fixes:
+        if not fix_groups:
             print("No unresolved fixes found.")
         else:
-            print(f"Found {len(unresolved_fixes)} unresolved file(s)\n")
+            # Process each fix group immediately
+            for group_idx, group in enumerate(fix_groups):
+                m_file_parent = group["m_file"]
+                oob = group["oob"]
+                files = group["files"]
 
-            # Build task list
-            tasks = []
-            for file_entry in unresolved_fixes:
-                print(f"Processing file entry: {file_entry}")
-                m_file_parent = file_entry.get("m_file")
-                file_name = file_entry.get("file")
+                print(f"\n--- Group {group_idx + 1}/{len(fix_groups)}: {m_file_parent} (oob: {oob}) ---")
 
-                if not file_name:
-                    print(f"  WARNING: No file field found in entry, skipping")
-                    continue
+                # Resolve paths for all files in this group
+                tasks = []
+                for file_entry in files:
+                    file_name = file_entry.get("file")
+                    if not file_name:
+                        continue
 
-                # Convert .wav to .mp4
-                filename_without_ext = os.path.splitext(file_name)[0]
+                    filename_without_ext = os.path.splitext(file_name)[0]
+                    input_path, output_path = find_video_in_directories(base_dir, filename_without_ext)
 
-                # Find video
-                input_path, output_path = find_video_in_directories(
-                    base_dir, filename_without_ext
-                )
+                    if input_path is None:
+                        print(f"  Not found: {filename_without_ext}.mp4")
+                        continue
 
-                if input_path is None:
-                    print(f"Video not found: {filename_without_ext}.mp4")
-                    continue
+                    cleanup_existing_outputs(output_path)
+                    tasks.append((input_path, output_path, m_file_parent, file_name, oob))
 
-                print(f"Found: {input_path}")
-
-                # Cleanup existing outputs
-                cleanup_existing_outputs(output_path)
-
-                tasks.append((input_path, output_path, m_file_parent, file_name))
-
-            # Process tasks
-            if tasks:
-                process_fix_tasks(tasks, temp_base)
-            else:
-                print("No valid tasks to process (videos may not be found or file fields may be empty)")
+                # Process this group's tasks immediately
+                if tasks:
+                    process_fix_tasks(tasks, temp_base)
+                else:
+                    print(f"  No valid files for {m_file_parent}")
 
         if not loop:
             break

@@ -8,10 +8,192 @@ from collections import defaultdict
 from PIL import Image
 from qreader import QReader  # Import QReader for QR code detection
 import numpy as np
+from pyzbar import pyzbar as pyzbar_mod
 
 import psutil
 import sys
 import os
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PARTIAL QR DECODE (reconstructs missing top-right finder pattern)
+# ─────────────────────────────────────────────────────────────────────────────
+
+FINDER_PATTERN = np.array([
+    [1, 1, 1, 1, 1, 1, 1],
+    [1, 0, 0, 0, 0, 0, 1],
+    [1, 0, 1, 1, 1, 0, 1],
+    [1, 0, 1, 1, 1, 0, 1],
+    [1, 0, 1, 1, 1, 0, 1],
+    [1, 0, 0, 0, 0, 0, 1],
+    [1, 1, 1, 1, 1, 1, 1],
+], dtype=np.uint8)
+
+
+def find_square_finders(gray):
+    _, binary = cv2.threshold(gray, 100, 255, cv2.THRESH_BINARY_INV)
+    contours, _ = cv2.findContours(binary, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    candidates = []
+    for c in contours:
+        peri = cv2.arcLength(c, True)
+        approx = cv2.approxPolyDP(c, 0.05 * peri, True)
+        if len(approx) == 4:
+            x, y, cw, ch = cv2.boundingRect(approx)
+            ar = cw / ch if ch else 0
+            if 0.7 < ar < 1.3 and 20 < cw < gray.shape[1] // 2:
+                candidates.append((x, y, cw, ch))
+    return sorted(candidates, key=lambda s: -(s[2] * s[3]))
+
+
+def find_tl_bl_finders(gray):
+    squares = find_square_finders(gray)
+    if not squares:
+        return None, None
+    tl = min(squares, key=lambda s: s[0] + s[1])
+    tl_size = tl[2]
+    bl_candidates = [
+        s for s in squares
+        if s != tl
+        and abs(s[2] - tl_size) < tl_size * 0.3
+        and abs(s[0] - tl[0]) < tl_size * 2
+        and s[1] > tl[1] + tl_size * 3
+    ]
+    bl = max(bl_candidates, key=lambda s: s[2] * s[3]) if bl_candidates else None
+    return tl, bl
+
+
+def reconstruct_axis_aligned(img, tl_finder, version):
+    x0, y0, fw, fh = tl_finder
+    module_size = fw / 7.0
+    h, w = img.shape[:2]
+    n_modules = (version - 1) * 4 + 21
+    tr_x0 = int(x0 + (n_modules - 7) * module_size)
+    tr_y0 = y0
+    tr_right = tr_x0 + int(7 * module_size)
+    pad_needed = max(0, tr_right - w) + int(module_size * 5)
+    canvas = cv2.copyMakeBorder(img, 0, 0, 0, pad_needed,
+                                 cv2.BORDER_CONSTANT, value=(255, 255, 255))
+    for row in range(7):
+        for col in range(7):
+            px0 = tr_x0 + int(col * module_size)
+            py0 = tr_y0 + int(row * module_size)
+            px1 = tr_x0 + int((col + 1) * module_size)
+            py1 = tr_y0 + int((row + 1) * module_size)
+            if px1 > w - 2:
+                color = (0, 0, 0) if FINDER_PATTERN[row, col] == 1 else (255, 255, 255)
+                cv2.rectangle(canvas, (px0, py0), (px1, py1), color, -1)
+    return canvas
+
+
+def reconstruct_rotated(img, tl_finder, bl_finder, verbose=False):
+    x_tl, y_tl, fw_tl, fh_tl = tl_finder
+    x_bl, y_bl, fw_bl, fh_bl = bl_finder
+    h, w = img.shape[:2]
+    qr_tl = np.float32([x_tl, y_tl])
+    qr_bl = np.float32([x_bl, y_bl + fh_bl])
+    left_vec = qr_bl - qr_tl
+    lx, ly = left_vec
+    right_vec = np.float32([ly, -lx])
+    right_unit = right_vec / np.linalg.norm(right_vec)
+    down_unit = left_vec / np.linalg.norm(left_vec)
+    module_size = fw_tl / 7.0
+
+    for version in range(3, 8):
+        n_modules = (version - 1) * 4 + 21
+        expected_side = n_modules * module_size
+        qr_tr = qr_tl + expected_side * right_unit
+        qr_br = qr_bl + expected_side * right_unit
+
+        if verbose:
+            print(f"  v{version}: TR at x={qr_tr[0]:.0f}, missing={qr_tr[0] - w:.0f}px")
+
+        pad_r = max(0, int(qr_tr[0] - w) + int(module_size * 6))
+        canvas = cv2.copyMakeBorder(img, 0, 0, 0, pad_r,
+                                     cv2.BORDER_CONSTANT, value=(255, 255, 255))
+        tr_origin = qr_tl + (n_modules - 7) * module_size * right_unit
+
+        for row in range(7):
+            for col in range(7):
+                p00 = tr_origin + col * module_size * right_unit + row * module_size * down_unit
+                p10 = p00 + module_size * right_unit
+                p01 = p00 + module_size * down_unit
+                p11 = p00 + module_size * right_unit + module_size * down_unit
+                pts = np.array([p00, p10, p11, p01], dtype=np.int32)
+                if pts[:, 0].max() > w - 2:
+                    color = (0, 0, 0) if FINDER_PATTERN[row, col] == 1 else (255, 255, 255)
+                    cv2.fillPoly(canvas, [pts], color)
+
+        size = int(n_modules * module_size)
+        src_pts = np.float32([qr_tl, qr_tr, qr_br, qr_bl])
+        dst_pts = np.float32([[0, 0], [size, 0], [size, size], [0, size]])
+        M = cv2.getPerspectiveTransform(src_pts, dst_pts)
+        flat = cv2.warpPerspective(canvas, M, (size, size),
+                                    flags=cv2.INTER_LANCZOS4,
+                                    borderValue=(255, 255, 255))
+        flat_gray = cv2.cvtColor(flat, cv2.COLOR_BGR2GRAY)
+
+        for binarized in [
+            cv2.threshold(flat_gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1],
+            cv2.threshold(flat_gray, 120, 255, cv2.THRESH_BINARY)[1],
+            cv2.adaptiveThreshold(flat_gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                                   cv2.THRESH_BINARY, 15, 4),
+        ]:
+            padded = cv2.copyMakeBorder(binarized, 20, 20, 20, 20,
+                                         cv2.BORDER_CONSTANT, value=255)
+            result = pyzbar_mod.decode(padded)
+            if result:
+                return result[0].data.decode("utf-8")
+    return None
+
+
+def decode_partial_qr(image_input, verbose=False):
+    if isinstance(image_input, str):
+        img = cv2.imread(image_input)
+    else:
+        img = image_input.copy()
+    if img is None:
+        return None
+
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    h, w = img.shape[:2]
+
+    # Step 1: direct decode
+    result = pyzbar_mod.decode(gray)
+    if result:
+        return result[0].data.decode("utf-8")
+
+    # Step 2: find finder patterns
+    tl_finder, bl_finder = find_tl_bl_finders(gray)
+    if tl_finder is None:
+        return None
+
+    module_size = tl_finder[2] / 7.0
+
+    # Step 3A: axis-aligned reconstruction
+    for version in range(2, 9):
+        n_modules = (version - 1) * 4 + 21
+        if tl_finder[0] + n_modules * module_size < w + module_size * 0.3:
+            continue
+        canvas = reconstruct_axis_aligned(img, tl_finder, version)
+        canvas_gray = cv2.cvtColor(canvas, cv2.COLOR_BGR2GRAY)
+        for proc in [
+            canvas_gray,
+            cv2.adaptiveThreshold(canvas_gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                                   cv2.THRESH_BINARY, 15, 4),
+        ]:
+            result = pyzbar_mod.decode(proc)
+            if result:
+                return result[0].data.decode("utf-8")
+
+    # Step 3B: rotated reconstruction
+    if bl_finder is not None:
+        result = reconstruct_rotated(img, tl_finder, bl_finder, verbose=verbose)
+        if result:
+            return result
+
+    return None
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 
 def is_already_running(script_name):
     """
@@ -54,6 +236,69 @@ def preprocess_image(frame):
     
     # If not using binarization, return the RGB frame
     return frame_rgb
+
+def fill_empty_jsons_from_other_cameras(directory_date_path, date_str):
+    """
+    For any camera that has empty [] JSON files, try to copy QR data from another camera
+    that successfully decoded the QR code at the same index position.
+    Only applies when all cameras have the same number of MP4 files.
+    """
+    # Group files by camera letter
+    camera_files = defaultdict(list)
+    for filename in os.listdir(directory_date_path):
+        if filename.upper().endswith('.MP4') and date_str in filename:
+            camera_letter = filename[0].upper()
+            camera_files[camera_letter].append(filename)
+
+    if len(camera_files) < 2:
+        print("Not enough cameras to cross-reference QR data.")
+        return
+
+    # Check if all cameras have the same file count
+    counts = [len(files) for files in camera_files.values()]
+    if len(set(counts)) != 1:
+        print(f"Camera file counts differ ({dict((k, len(v)) for k, v in camera_files.items())}), skipping cross-camera QR fill.")
+        return
+
+    # Sort each camera's files by increment number
+    for cam in camera_files:
+        camera_files[cam].sort(key=lambda f: int(os.path.splitext(f)[0].split('_')[1]))
+
+    file_count = counts[0]
+    filled = 0
+
+    for idx in range(file_count):
+        for cam in camera_files:
+            json_filename = os.path.splitext(camera_files[cam][idx])[0] + '.json'
+            json_path = os.path.join(directory_date_path, json_filename)
+
+            # Check if this JSON is empty
+            if not os.path.exists(json_path):
+                continue
+            with open(json_path, 'r') as f:
+                data = json.load(f)
+            if data:
+                continue
+
+            # This JSON is empty, try to find valid data from another camera at same index
+            for other_cam in camera_files:
+                if other_cam == cam:
+                    continue
+                other_json = os.path.splitext(camera_files[other_cam][idx])[0] + '.json'
+                other_json_path = os.path.join(directory_date_path, other_json)
+                if not os.path.exists(other_json_path):
+                    continue
+                with open(other_json_path, 'r') as f:
+                    other_data = json.load(f)
+                if other_data:
+                    with open(json_path, 'w') as f:
+                        json.dump(other_data, f)
+                    print(f"Filled {json_filename} with QR data from {other_json} (camera {other_cam})")
+                    filled += 1
+                    break
+
+    print(f"Cross-camera QR fill complete: filled {filled} empty JSON files.")
+
 
 def process_videos_in_directory(directory_date_path, qreader):
     """
@@ -190,14 +435,45 @@ def process_videos_in_directory(directory_date_path, qreader):
 
                 # After 200 frames, stop the video
                 if frame_count > 120:
-                    # **Write an Empty Array to JSON if No QR Code Found**
-                    try:
-                        with open(json_path, 'w') as json_file:
-                            json.dump([], json_file)
-                        print(f"Saved empty array to {json_path} as no QR codes were found in {filename}.")
-                    except Exception as e:
-                        print(f"Error writing JSON file for {filename}: {e}")
-                    print(f"Stopped processing {filename} after {frame_count} frames without finding a valid QR code.")
+                    # **Step 2: Try decode_partial_qr on a cropped frame before giving up**
+                    print(f"QReader failed for {filename}, trying partial QR reconstruction...")
+                    partial_decoded = None
+                    cap.set(cv2.CAP_PROP_POS_FRAMES, 50)
+                    ret_partial, frame_partial = cap.read()
+                    if ret_partial:
+                        h_frame, w_frame = frame_partial.shape[:2]
+                        # Crop to bottom-right region where QR monitor is located
+                        qr_crop = frame_partial[int(h_frame*0.6):, int(w_frame*0.4):]
+                        # Convert RGB back to BGR for decode_partial_qr (expects BGR)
+                        qr_crop_bgr = cv2.cvtColor(qr_crop, cv2.COLOR_RGB2BGR)
+                        try:
+                            partial_result = decode_partial_qr(qr_crop_bgr, verbose=False)
+                            if partial_result:
+                                try:
+                                    decoded_data = json.loads(partial_result)
+                                    partial_decoded = [decoded_data]
+                                    print(f"Partial QR reconstruction succeeded for {filename}: {decoded_data}")
+                                except json.JSONDecodeError:
+                                    print(f"Partial QR decoded but JSON parse failed: {partial_result}")
+                        except Exception as e:
+                            print(f"Partial QR reconstruction error for {filename}: {e}")
+
+                    if partial_decoded:
+                        try:
+                            with open(json_path, 'w') as json_file:
+                                json.dump(partial_decoded, json_file)
+                            print(f"Saved partial QR result to {json_path}")
+                        except Exception as e:
+                            print(f"Error writing JSON file for {filename}: {e}")
+                    else:
+                        # **Write an Empty Array to JSON if No QR Code Found**
+                        try:
+                            with open(json_path, 'w') as json_file:
+                                json.dump([], json_file)
+                            print(f"Saved empty array to {json_path} as no QR codes were found in {filename}.")
+                        except Exception as e:
+                            print(f"Error writing JSON file for {filename}: {e}")
+                    print(f"Stopped processing {filename} after {frame_count} frames.")
                     break
 
             # Release video capture for the current video
@@ -239,7 +515,7 @@ def main():
     # Fetch records from studio_data where ready = '1', ordered by date descending
     sql = "SELECT * FROM studio_data WHERE ready IN ('1', '2') ORDER BY date DESC"
     # sql = "SELECT * FROM studio_data WHERE date = '2024-11-08' ORDER BY date DESC"
-    
+
     try:
         cursor.execute(sql)
         result = cursor.fetchall()
@@ -301,6 +577,10 @@ def main():
 
                 # Output the results
                 print("Detected QR codes:", qr_codes)
+
+                # Fill empty JSONs from other cameras (only if all cameras have same file count)
+                date_str_nodash = date_param.replace('-', '')
+                fill_empty_jsons_from_other_cameras(directory_path, date_str_nodash)
 
             
             else:

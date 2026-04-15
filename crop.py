@@ -231,42 +231,33 @@ def process_frames(frame_paths, output_dir=None):
 
             # If we have a midpoint, create a horizontal crop centered on it
             if midpoint_x is not None:
-                crop_width = 1440
-                half_crop = crop_width // 2
                 current_width = processed_image.shape[1]
-                
-                # Calculate crop boundaries
-                new_left = max(0, midpoint_x - half_crop)
-                new_right = min(current_width, new_left + crop_width)
-                
-                # Adjust if we hit the right edge
-                if new_right == current_width:
-                    new_left = max(0, current_width - crop_width)
-                
+
                 #target display aspect ratio is 1.15
                 target_width = int(target_height * 1.15)
+                half_crop = target_width // 2
 
-                if new_right - new_left < target_width:
-                    # Calculate new left and right based on target width
-                    new_left = max(0, midpoint_x - target_width // 2)
-                    new_right = min(current_width, new_left + target_width)
-                
-                # print(f"New left: {new_left}, New right: {new_right}, Current width: {current_width}")
-                #if new_left is maxed out, then adjust new_right accordingly
+                # Calculate crop boundaries centered on midpoint
+                new_left = max(0, midpoint_x - half_crop)
+                new_right = new_left + target_width
+
+                # Adjust if we hit the right edge
+                if new_right > current_width:
+                    new_right = current_width
+                    new_left = max(0, current_width - target_width)
+
+                # Adjust if we hit the left edge
                 if new_left == 0:
-                    #calculate new_left with midpoint_x and adjust new difference with new_right
-                    new_right = midpoint_x + (midpoint_x - new_left) - 50
-                if new_right == current_width:
-                    #calculate new_right with midpoint_x and adjust new difference with new_left
-                    new_left = midpoint_x - (new_right - midpoint_x) + 50
+                    new_right = min(current_width, target_width)
 
-
-                # #add extra margin to left and right
-                # new_left = max(0, new_left - 200)
-                # new_right = min(current_width, new_right + 200)
                 # Create the final cropped image
                 processed_image = processed_image[:, new_left:new_right]
-        
+
+        # Resize to fixed output resolution: 1440 x 1252 (ratio ~1.15)
+        OUTPUT_WIDTH = 1440
+        OUTPUT_HEIGHT = 1252
+        processed_image = cv2.resize(processed_image, (OUTPUT_WIDTH, OUTPUT_HEIGHT), interpolation=cv2.INTER_LANCZOS4)
+
         # Save the processed frame
         output_frame_path = os.path.join(output_dir, f"processed_{idx:06d}.jpg")
         cv2.imwrite(output_frame_path, processed_image)
@@ -543,9 +534,7 @@ def main():
     # base_dir = Path("/Users/gomerotterspeer/drs/landscape")    # Loop through each parent directory in base_dir (e.g., "2025-03-01")
     # homedir = Path("/Users/gomerotterspeer/")
 
-    # Only process folders from the last 2 weeks
-    cutoff_date = datetime.now() - timedelta(days=31)
-    print(f"Processing folders from {cutoff_date.strftime('%Y-%m-%d')} onwards (last 2 weeks)")
+    print(f"Processing date directories from the past 2 weeks")
 
     for subdir in sorted(os.listdir(base_dir), reverse=True):
         date_dir = os.path.join(base_dir, subdir)
@@ -555,10 +544,12 @@ def main():
         # Parse date from directory name (format: YYYY-MM-DD)
         try:
             dir_date = datetime.strptime(subdir, "%Y-%m-%d")
-            if dir_date < cutoff_date:
-                continue
         except ValueError:
             # Skip directories that don't match date format
+            continue
+
+        # Only process folders from the past 31 days
+        if dir_date < datetime.now() - timedelta(days=31):
             continue
         
         input_folder = os.path.join(date_dir, "post_noncropped")
@@ -576,11 +567,11 @@ def main():
             input_file = os.path.join(input_folder, filename)
             output_file = os.path.join(output_folder, filename)
             
-            # Check for existing error JSON
-            error_json_path = os.path.splitext(input_file)[0] + "_error.json"
-            if os.path.exists(error_json_path):
-                print(f"Skipping {filename} - error file exists: {error_json_path}")
-                continue
+            # Check for existing error JSON - ignore and reprocess
+            # error_json_path = os.path.splitext(input_file)[0] + "_error.json"
+            # if os.path.exists(error_json_path):
+            #     print(f"Skipping {filename} - error file exists: {error_json_path}")
+            #     continue
             
             # Check for the _h264.mp4 version since that's the actual final output
             file_parts = os.path.splitext(filename)

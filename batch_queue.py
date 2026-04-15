@@ -1,9 +1,17 @@
-import os, sys, glob, shutil, time, json, subprocess
+import os, sys, glob, shutil, time, json, subprocess, resource
 from datetime import datetime
 from python_get_resolve import GetResolve
 from pathlib import Path
 from video_api_client import VideoAPIClient  # Import the API client
 from signcollect_monitor import SignCollectMonitor  # Import the monitor client
+
+# Raise open file descriptor limit to avoid "Too many open files" errors
+try:
+    soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+    resource.setrlimit(resource.RLIMIT_NOFILE, (min(65536, hard), hard))
+    print(f"File descriptor limit raised to {min(65536, hard)}")
+except Exception as e:
+    print(f"Could not raise file descriptor limit: {e}")
 
 # Ensure output is flushed immediately to logs
 sys.stdout.reconfigure(line_buffering=True)
@@ -23,7 +31,7 @@ export_dir = Path("/Users/signlab/drs/export")
 setting_path = "/Users/signlab/drs/Settings.setting"  # lala6 project
 
 # Batch limit to prevent DaVinci memory issues
-BATCH_LIMIT = 100
+BATCH_LIMIT = 50
 
 # ============================================================================
 # Helper functions (from batch.py)
@@ -290,7 +298,7 @@ def queue_files_for_project(resolve, projectManager, project_name, files, settin
     if all_clips:
         mediapool.DeleteClips(all_clips)
 
-    # Add ALL files to media pool at once (faster than one-by-one)
+    # Add ALL files to media pool at once (using local copies in import dir)
     print(f"Adding {len(files)} files to media pool...")
     file_paths = [str(f) for f in files]
     all_video_items = resolve.GetMediaStorage().AddItemListToMediaPool(file_paths)
@@ -315,8 +323,7 @@ def queue_files_for_project(resolve, projectManager, project_name, files, settin
         # Get the media pool item for this file
         video_item = clip_map.get(filename)
         if not video_item:
-            print(f"Failed to find {filename} in media pool")
-            create_skip_file(filename, post_noncropped_dir, "Failed to find in media pool")
+            print(f"Failed to find {filename} in media pool - will retry next cycle")
             continue
 
         # Create a new timeline for this video
@@ -369,13 +376,34 @@ def queue_files_for_project(resolve, projectManager, project_name, files, settin
 
 def process_batch(files_batch, post_noncropped_dir, batch_num, total_batches):
     """Process a single batch of files"""
+    import_dir = Path("/Users/signlab/drs/import")
     print(f"\n=== Processing batch {batch_num}/{total_batches} ({len(files_batch)} files) ===")
 
-    # Clean export directory
-    print("Cleaning export directory...")
-    for f in export_dir.glob("*"):
-        if f.is_file():
-            f.unlink()
+    # Clean import and export directories
+    print("Cleaning import and export directories...")
+    for d in [import_dir, export_dir]:
+        d.mkdir(parents=True, exist_ok=True)
+        for f in d.glob("*"):
+            if f.is_file():
+                f.unlink()
+
+    # Copy files from rclone mount to local import directory
+    local_files = []
+    for raw_file in files_batch:
+        local_path = import_dir / raw_file.name
+        print(f"  Copying {raw_file.name} to local import dir...")
+        try:
+            rsync_copy(raw_file, local_path)
+            local_files.append(local_path)
+        except OSError as e:
+            print(f"  Failed to copy {raw_file.name}: {e}")
+            create_skip_file(raw_file.name, post_noncropped_dir, f"rsync copy failed: {e}")
+
+    if not local_files:
+        print("No files copied successfully. Skipping batch.")
+        return False
+
+    print(f"Copied {len(local_files)}/{len(files_batch)} files to local import dir")
 
     # Open DaVinci Resolve
     print("Opening DaVinci Resolve...")
@@ -389,9 +417,9 @@ def process_batch(files_batch, post_noncropped_dir, batch_num, total_batches):
 
     projectManager = resolve.GetProjectManager()
 
-    # Queue files using lala6 project (directly from source, no copying)
+    # Queue local files using lala6 project
     project = queue_files_for_project(resolve, projectManager, "lala6",
-                                      files_batch, setting_path, post_noncropped_dir)
+                                      local_files, setting_path, post_noncropped_dir)
 
     if not project:
         print("Failed to queue files - project not loaded")
@@ -455,6 +483,12 @@ def process_batch(files_batch, post_noncropped_dir, batch_num, total_batches):
         except OSError as e:
             print(f"  Failed to move {clean_filename}: {e}")
 
+    # Clean up local import directory
+    print("Cleaning up import directory...")
+    for f in import_dir.glob("*"):
+        if f.is_file():
+            f.unlink()
+
     # Force quit DaVinci Resolve to free memory
     print("Closing DaVinci Resolve to free memory...")
     os.system("pkill -9 -f 'DaVinci Resolve'")
@@ -510,28 +544,80 @@ def main():
 
     print(f"Split into {total_batches} batch(es) of up to {BATCH_LIMIT} files each")
 
-    # 4. Process each batch
+    # 4. Process each batch (retry with smaller batch on "Too many open files")
     for batch_num, batch in enumerate(batches, 1):
-        # Get the post_noncropped_dir for the first file in batch (all files in a batch
-        # may span multiple days, but we handle this in process_batch's move step)
         first_file = batch[0]
         post_noncropped_dir = all_post_dirs[str(first_file)]
-        success = process_batch(batch, post_noncropped_dir, batch_num, total_batches)
+        try:
+            success = process_batch(batch, post_noncropped_dir, batch_num, total_batches)
+        except OSError as e:
+            if e.errno == 24:  # Too many open files
+                print(f"Too many open files on batch {batch_num} - retrying with batch size 25...")
+                sub_batches = [batch[i:i + 25] for i in range(0, len(batch), 25)]
+                success = True
+                for sub_num, sub_batch in enumerate(sub_batches, 1):
+                    print(f"  Sub-batch {sub_num}/{len(sub_batches)} ({len(sub_batch)} files)...")
+                    sub_post_dir = all_post_dirs[str(sub_batch[0])]
+                    if not process_batch(sub_batch, sub_post_dir, f"{batch_num}.{sub_num}", total_batches):
+                        success = False
+                        break
+            else:
+                raise
         if not success:
             print(f"Batch {batch_num} failed. Stopping.")
             break
 
     print(f"\n=== Batch Queue Script Completed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ===")
 
+def get_keyboard_idle_seconds():
+    """Get seconds since last keyboard/mouse activity using macOS IOKit"""
+    try:
+        result = subprocess.run(
+            ["ioreg", "-c", "IOHIDSystem"],
+            capture_output=True, text=True
+        )
+        for line in result.stdout.splitlines():
+            if "HIDIdleTime" in line:
+                # Value is in nanoseconds
+                ns = int(line.strip().split()[-1])
+                return ns / 1_000_000_000
+    except Exception as e:
+        print(f"Could not read idle time: {e}")
+    return None
+
+IDLE_THRESHOLD = 30 * 60  # 30 minutes in seconds
+
+def wait_for_inactivity():
+    """Wait until keyboard/mouse has been idle for 30+ minutes"""
+    idle = get_keyboard_idle_seconds()
+    if idle is None:
+        print("Cannot read idle time, proceeding anyway")
+        return
+
+    if idle >= IDLE_THRESHOLD:
+        print(f"User idle for {idle/60:.0f} min (>30 min) - proceeding")
+        return
+
+    print(f"User active (idle {idle/60:.1f} min) - waiting for 30 min inactivity...")
+    while True:
+        time.sleep(60)
+        idle = get_keyboard_idle_seconds()
+        if idle is None or idle >= IDLE_THRESHOLD:
+            print(f"User now idle for {idle/60:.0f} min - proceeding")
+            return
+
 if __name__ == "__main__":
     # Register with monitoring system
     monitor.register()
 
-    print("Starting batch_queue service - will check for files every hour")
+    print("Starting batch_queue service - will check for files every hour (pauses when user is active)")
     while True:
         try:
             # Send heartbeat at start of each cycle
             monitor.send_heartbeat()
+
+            # Wait until user has been inactive for 30+ minutes
+            wait_for_inactivity()
 
             main()
             print("Sleeping for 1 hour until next check...")
