@@ -3,6 +3,7 @@ import cv2
 import mediapipe as mp
 import numpy as np
 import time
+from datetime import datetime, timedelta
 import json
 import subprocess
 import requests
@@ -13,10 +14,19 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 import sys
 import math
+from signcollect_monitor import SignCollectMonitor  # Import the monitor client
 
 # Ensure output is flushed immediately to logs
 sys.stdout.reconfigure(line_buffering=True)
 sys.stderr.reconfigure(line_buffering=True)
+
+# Initialize the monitor
+monitor = SignCollectMonitor(
+    client_id='drs-crop-processor',
+    client_name='DRS Crop Processor',
+    description='MediaPipe pose detection and video cropping pipeline',
+    heartbeat_interval=3600
+)
 
 # ----- Orientation Detection Function -----
 
@@ -533,12 +543,18 @@ def main():
     # base_dir = Path("/Users/gomerotterspeer/drs/landscape")    # Loop through each parent directory in base_dir (e.g., "2025-03-01")
     # homedir = Path("/Users/gomerotterspeer/")
 
+    print(f"Processing all date directories")
+
     for subdir in sorted(os.listdir(base_dir), reverse=True):
         date_dir = os.path.join(base_dir, subdir)
         if not os.path.isdir(date_dir):
             continue
-        #if 2025 is not in date_dir then continue
-        if "2025" not in date_dir:
+
+        # Parse date from directory name (format: YYYY-MM-DD)
+        try:
+            datetime.strptime(subdir, "%Y-%m-%d")
+        except ValueError:
+            # Skip directories that don't match date format
             continue
         
         input_folder = os.path.join(date_dir, "post_noncropped")
@@ -556,11 +572,11 @@ def main():
             input_file = os.path.join(input_folder, filename)
             output_file = os.path.join(output_folder, filename)
             
-            # Check for existing error JSON
-            error_json_path = os.path.splitext(input_file)[0] + "_error.json"
-            if os.path.exists(error_json_path):
-                print(f"Skipping {filename} - error file exists: {error_json_path}")
-                continue
+            # Check for existing error JSON - ignore and reprocess
+            # error_json_path = os.path.splitext(input_file)[0] + "_error.json"
+            # if os.path.exists(error_json_path):
+            #     print(f"Skipping {filename} - error file exists: {error_json_path}")
+            #     continue
             
             # Check for the _h264.mp4 version since that's the actual final output
             file_parts = os.path.splitext(filename)
@@ -625,6 +641,9 @@ def main():
         print("No tasks to process.")
 
 if __name__ == "__main__":
+    # Register with monitoring system
+    monitor.register()
+
     # First clean up the temp directory
     temp_dir = "/Users/signlab/drs/temp/"
     if os.path.exists(temp_dir):
@@ -633,20 +652,23 @@ if __name__ == "__main__":
         cleanup_temp_by_size(temp_dir, max_size_gb=10)  # Ensure size is under limit
     else:
         os.makedirs(temp_dir, exist_ok=True)
-        
+
     # Run main() in an infinite loop every hour if it's not currently running.
     while True:
         try:
+            # Send heartbeat at start of each cycle
+            monitor.send_heartbeat()
+
             # Clean up old temp files before each run
             cleanup_old_temp_files(temp_dir, max_age_hours=1)
             cleanup_temp_by_size(temp_dir, max_size_gb=10)
-            
+
             main()
         except Exception as e:
             print(f"Error in main execution: {e}")
-            
+
         # Clean up after processing
         cleanup_old_temp_files(temp_dir, max_age_hours=1)
-        
+
         print("Sleeping for one hour before next run...")
-        time.sleep(3600)
+        time.sleep(900)
