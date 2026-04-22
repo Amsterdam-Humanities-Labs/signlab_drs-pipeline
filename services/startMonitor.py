@@ -1523,7 +1523,7 @@ class USBMonitor(QWidget):
         Generate today's directory path based on current date
         """
         today = datetime.now().strftime("%Y-%m-%d")
-        return f"/Users/admin/signCollect/studioFiles/{today}/raw"
+        return f"/Users/signlab/signCollect/AIHR-FGW-TEST-SIGNLAB (Projectfolder)/studioFiles/{today}/raw"
     
     def count_files_in_directory(self, directory_path=None):
         """

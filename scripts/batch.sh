@@ -14,7 +14,7 @@ while true; do
     echo "========================================"
 
     # Run batch.py (runs once and exits)
-    /usr/bin/python3 services/batch.py
+    /usr/bin/python3 variants/batch.py
 
     EXIT_CODE=$?
     echo "batch.py exited with code $EXIT_CODE at $(date)"

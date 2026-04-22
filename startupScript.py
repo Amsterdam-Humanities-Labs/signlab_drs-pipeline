@@ -58,7 +58,7 @@ class ProcessMonitor:
             },
             {
                 'name': 'batch',
-                'command': ['/usr/bin/python3', '/Users/signlab/drs/services/batch.py'],
+                'command': ['/usr/bin/python3', '/Users/signlab/drs/services/batch_queue.py'],
                 'cwd': '/Users/signlab/drs'
             },
             {

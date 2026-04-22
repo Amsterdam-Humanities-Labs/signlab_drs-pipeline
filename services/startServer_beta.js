@@ -27,6 +27,11 @@ monitor.register().then(() => {
 var ftpBusy = false;
 https.globalAgent.options.rejectUnauthorized = false;
 
+// Timestamp-prefixed logger. Prefix every console.log with ISO UTC timestamp so log lines
+// can be correlated with file mtimes after the fact.
+const _origLog = console.log.bind(console);
+console.log = (...args) => _origLog(new Date().toISOString(), ...args);
+
 // Directory to serve files from
 const directoryToServe = '/Users/admin/signCollect/studioFiles';
 
@@ -342,6 +347,12 @@ function processQueue() {
 
 // Helper function to send data to WebSocket clients
 function notifyWebSocketClients(dataToSend) {
+  // Log the fan-out payload so we can diagnose trigger storms and dropped commands later
+  let openCount = 0;
+  wss.clients.forEach(function each(client) {
+    if (client.readyState === WebSocket.OPEN) openCount++;
+  });
+  console.log(`WS broadcast (${openCount} clients): ${JSON.stringify(dataToSend)}`);
   wss.clients.forEach(function each(client) {
     if (client.readyState === WebSocket.OPEN) {
       client.send(JSON.stringify(dataToSend));
@@ -737,8 +748,8 @@ server.post('/recording', (req, res) => {
   const state = req.body.state;
   const cameraNumber = req.body.cameraNumber;
 
-  // Log received data
-  console.log(`Received 'cameraId': ${cameraId}`);
+  // Log start/stop with full context so a future trigger-storm can be diagnosed
+  console.log(`/recording cameraId=${cameraId} cameraNumber=${cameraNumber} state=${state} body=${JSON.stringify(req.body)}`);
 
   // Prepare data to send via WebSocket
   const dataToSend = {

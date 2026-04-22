@@ -26,13 +26,13 @@ These scripts run continuously via `startupScript.py` and are automatically rest
 
 | Script | Description |
 |--------|-------------|
-| `services/startServer_beta.js` | **Express/WebSocket server.** Handles camera communication (L/M/R cameras), file uploads, download triggers, and broadcasts events (fileDownloaded, completedMultiple) to connected clients. |
-| `services/batch.py` | **DaVinci Resolve rendering pipeline.** Picks up raw camera files, applies Fusion compositions (green screen removal, gradient backgrounds via `config/Settings.setting`), renders to `post_noncropped/`, and registers results with the video API. |
+| `services/startServer_beta.js` | **Express/WebSocket server.** Handles camera communication (L/M/R cameras), file uploads, download triggers, and broadcasts events (fileDownloaded, completedMultiple) to connected clients. Every log line is prefixed with an ISO UTC timestamp; `/recording` requests log the full body (state, cameraNumber, glosId) and every WebSocket broadcast logs its payload + connected-client count. |
+| `services/batch_queue.py` | **DaVinci Resolve rendering pipeline (queue-based).** Picks up raw camera files, applies Fusion compositions (green screen removal, gradient backgrounds via `config/Settings.setting`), renders to `post_noncropped/`, and registers results with the video API. Pauses cycles until keyboard/mouse idle 30+ min. |
 | `services/crop.py` | **MediaPipe AI cropping.** Detects signer pose in rendered videos, crops to center on the interpreter with consistent framing (1:1.15 ratio), generates thumbnails, and uploads final files. Runs as a continuous polling service. |
 | `services/crop_fix.py` | **Re-cropping service.** Monitors a crop-fix API queue for videos that need re-cropping (e.g., bad framing detected after initial crop). Runs in its own screen session. |
 | `services/moveFiles.py` | **File organizer.** Moves incoming camera files from `import/` to date-based directories on the rclone mount (`studioFiles/YYYY-MM-DD/raw/`). Listens to WebSocket download events and waits for a cooldown period before moving. |
 | `services/convertFiles.py` | **Format converter and uploader.** Converts cropped videos to H.264, generates thumbnails, and uploads both to the SignCollect server. |
-| `services/listFiles.py` | **File status reporter.** Periodically scans studioFiles directories, counts files per date/type, and publishes status via the SignCollect monitoring API. |
+| `services/listFiles.py` | **File status reporter.** Periodically scans studioFiles directories, counts files per date/type (A/B/L/M/R `.MP4`), and POSTs to `signcollect.nl/listFiles.php`. Also fetches expected glosIds from `CR.php` and cross-checks them against L/M/R JSON sidecars, reporting `glosid_coverage` percentages per date. Sidecar reads are parallelized and cached locally at `logs/glosids_cache/<date>.json`. |
 | `services/mouse.py` | **Screen lock prevention.** Periodically moves the mouse cursor to keep macOS from going to sleep during long processing runs. |
 | `services/keyboard_monitor.py` | **Keyboard idle tracker.** Monitors keyboard input and writes timestamps to `last_keyboard_activity.txt`, used by other scripts to detect operator presence. |
 | `services/network_manager.py` | **Network watchdog.** Monitors ethernet connectivity and manages Tailscale VPN, automatically restarting network services when connectivity drops. |
@@ -66,7 +66,7 @@ Imported by services, variants, and tools. Do not run directly. Every consuming 
 | Script | Description |
 |--------|-------------|
 | `scripts/watchdog.sh` | **Meta-watchdog.** Monitors the `startupScript.py` process itself and restarts it if it crashes. Auto-generated/overwritten by `startupScript.py` on launch. |
-| `scripts/batch.sh` | **Batch watchdog wrapper.** Runs `services/batch.py` in a loop, restarting it after each exit and killing lingering DaVinci Resolve processes between runs. |
+| `scripts/batch.sh` | **Batch watchdog wrapper.** Runs `variants/batch.py` in a loop, restarting it after each exit and killing lingering DaVinci Resolve processes between runs. |
 | `scripts/claude-unlock.sh` | Unlocks the login keychain (helper for Claude Code sessions). |
 
 ## `variants/` — Pipeline Variants
@@ -76,7 +76,8 @@ Production variants of `batch.py` and `crop.py` for specific project types or pr
 ### Batch Variants
 | Script | Description |
 |--------|-------------|
-| `variants/batch_queue.py` | Queue-based DaVinci batch processing. Raises fd limit, copies files to local `import/` before render, retries on EMFILE with smaller batch, and pauses cycles until keyboard/mouse idle 30+ min. |
+| `variants/batch.py` | Original (non-queue) DaVinci batch pipeline. Used by `scripts/batch.sh` as a watchdog-restarted one-shot. |
+| `variants/batch_overwrite.py` | On-demand overwrite re-render for a specific date. `batch_overwrite.py YYYY-MM-DD [--cameras L,R,M] [--from NNNN] [--to NNNN]`. Ignores existing `post_noncropped/` output and rsync-overwrites in place (no pre-delete on rclone). Used when Fusion settings change and a previously rendered date needs redoing. |
 | `variants/batch_queue_api.py` | API-driven batch queue with multi-machine render coordination via `drs_render_client`. |
 | `variants/batch_queue_single.py` | Processes a single batch of files through the queue pipeline. Takes CLI arguments. |
 | `variants/batch_single.py` | Renders a hardcoded list of specific files through DaVinci Resolve. Edit `TARGET_FILES` before running. |
@@ -87,6 +88,7 @@ Production variants of `batch.py` and `crop.py` for specific project types or pr
 ### Crop Variants
 | Script | Description |
 |--------|-------------|
+| `variants/crop_overwrite.py` | On-demand overwrite re-crop for a specific date. `crop_overwrite.py YYYY-MM-DD [--cameras L,R,M] [--from NNNN] [--to NNNN]`. Ignores existing `post/` output and lets cv2.VideoWriter + `ffmpeg -y` overwrite in place. Pairs with `batch_overwrite.py` when a date needs full reprocessing. |
 | `variants/crop_single.py` | Crops a hardcoded list of specific files. Edit target files before running. |
 | `variants/crop_landscape.py` | Cropping pipeline adapted for landscape-format videos. |
 | `variants/crop_tyd.py` | Cropping pipeline for TYD project videos. Uses YOLO in addition to MediaPipe. |
