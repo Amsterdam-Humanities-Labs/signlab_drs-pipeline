@@ -36,8 +36,27 @@ class ProcessMonitor:
         self.mount_path = '/Users/signlab/signCollect'  # rclone mount path
         self.last_mount_check = 0  # Timestamp of last mount check
         self.mount_check_interval = 60  # Check mount every 60 seconds
-        # Scheduled restart configuration
-        self.restart_times = [(6, 0), (20, 0)]  # 6:00 AM and 8:00 PM
+        # rclone needs time to serve the mount after starting, especially when it
+        # has a large vfs write-back backlog to flush. Without this grace period the
+        # 60s marker check kills it mid-startup and it never mounts at all.
+        self.rclone_started_at = 0  # Timestamp rclone was last (re)started
+        self.rclone_grace_period = 1800  # Skip mount checks for 30 min after rclone start
+        # Never kill an rclone that is still writing to its log: with a large
+        # vfs write-back backlog it can be uploading unsaved data for a long time,
+        # and restarting it mid-flight only makes the backlog worse.
+        self.rclone_log = '/Users/signlab/drs/logs/rclone.log'
+        self.rclone_active_window = 120  # Seconds of log silence before it counts as stalled
+        # Scheduled restart configuration. Disabled: the 20:00 restart on
+        # 2026-08-07 SIGKILLed rclone mid-flush, stranded the FUSE mount and took
+        # the pipeline down. Services are still restarted on crash and rclone
+        # still has its own mount health check, so nothing needs daily recycling.
+        # Re-enable by putting (hour, minute) tuples back in this list.
+        self.restart_times = []  # was [(6, 0), (20, 0)]
+        # rclone is exempt from scheduled restarts. Stopping it mid-flight can
+        # exceed the 10s wait, and the SIGKILL fallback leaves a dead FUSE mount
+        # that ensure_unmounted() cannot clear - which blocks every remount after
+        # it. It has its own health check, so it does not need periodic recycling.
+        self.scheduled_restart_skip = {'rclone'}
         self.last_scheduled_restart = None  # Track last scheduled restart datetime
         
         self.services = [
@@ -66,11 +85,13 @@ class ProcessMonitor:
                 'command': ['/usr/bin/python3', '/Users/signlab/drs/services/crop.py'],
                 'cwd': '/Users/signlab/drs'
             },
-            {
-                'name': 'server',
-                'command': ['/opt/homebrew/bin/node', '/Users/signlab/drs/services/startServer_beta.js'],
-                'cwd': '/Users/signlab/drs'
-            },
+            # Disabled 2026-07-01: replaced by the Sony FX30 camera server
+            # (fx30MultiRecord) which owns port 8080. Re-enable only if reverting.
+            # {
+            #     'name': 'server',
+            #     'command': ['/opt/homebrew/bin/node', '/Users/signlab/drs/services/startServer_beta.js'],
+            #     'cwd': '/Users/signlab/drs'
+            # },
                 {
                 'name': 'convertFiles',
                 'command': ['/usr/bin/python3', '/Users/signlab/drs/services/convertFiles.py'],
@@ -86,10 +107,10 @@ class ProcessMonitor:
                     '--vfs-write-back', '5s',
                     '--vfs-cache-poll-interval', '1m',
                     '--dir-cache-time', '2h',
-                    '--transfers', '1',
+                    '--transfers', '4',
                     '--checkers', '4',
                     '--log-level', 'INFO',
-                    '--allow-non-empty',
+                    '--daemon-timeout', '60s',
                     '--cache-dir', '/Volumes/cacheDisk/rclone',
                     '--vfs-cache-mode', 'full',
                 ],
@@ -102,7 +123,7 @@ class ProcessMonitor:
             },
             {
                 'name': 'networkManager',
-                'command': ['/usr/bin/python3', '/Users/signlab/drs/services/network_manager.py'],
+                'command': ['/usr/bin/python3', '-u', '/Users/signlab/drs/services/network_manager.py'],
                 'cwd': '/Users/signlab/drs'
             },
             {
@@ -136,36 +157,116 @@ class ProcessMonitor:
         except Exception as e:
             logging.error(f"Failed to create log directory {self.log_dir}: {e}")
 
-    def check_mount_health(self) -> bool:
-        """Check if rclone mount is healthy and accessible"""
+    def network_ready(self, host="uva.data.surf.nl", timeout=10) -> bool:
+        """True if the WebDAV host resolves - mounting without DNS just hangs."""
         try:
-            # Check if the rclone marker file exists in mount directory
-            marker_file = os.path.join(self.mount_path, "AIHR-FGW-TEST-SIGNLAB (Projectfolder)", "do_not_remove_for_rclone")
-            if not os.path.exists(marker_file):
+            result = subprocess.run(
+                ['/usr/bin/python3', '-c',
+                 f'import socket; socket.getaddrinfo("{host}", 443)'],
+                capture_output=True, timeout=timeout)
+            return result.returncode == 0
+        except Exception:
+            return False
+
+    def ensure_unmounted(self, attempts=3) -> bool:
+        """Force-unmount every stacked mount at mount_path. True if nothing is mounted.
+
+        Restarting rclone used to mount over a dead mount (--allow-non-empty),
+        stacking FUSE mounts until system daemons wedged in getattr calls.
+        """
+        for _ in range(attempts + 1):
+            try:
+                mounts = subprocess.run(['mount'], capture_output=True, text=True, timeout=15).stdout
+            except Exception:
+                return False
+            if f' on {self.mount_path} ' not in mounts:
+                return True
+            subprocess.run(['umount', '-f', self.mount_path],
+                           check=False, capture_output=True, timeout=30)
+            time.sleep(2)
+        return False
+
+    def quarantine_stray_mountpoint(self) -> bool:
+        """Move stray files out of an unmounted mount point so rclone can mount.
+
+        Anything sitting in mount_path while nothing is mounted was written to the
+        bare directory by a service that ran while the mount was down, so it exists
+        only on local disk. rclone refuses to mount over a non-empty directory, and
+        that deadlocks every later remount: the pipeline keeps writing there, so the
+        directory never empties on its own and rclone crash-restarts forever.
+        Move the content aside rather than deleting it - it is the only copy.
+
+        Only call once ensure_unmounted() has confirmed nothing is mounted here,
+        otherwise this would rename a live mount point.
+        """
+        try:
+            entries = os.listdir(self.mount_path)
+        except FileNotFoundError:
+            os.makedirs(self.mount_path, exist_ok=True)
+            return True
+        except OSError as e:
+            logging.error(f"Cannot inspect mount point {self.mount_path}: {e}")
+            return False
+
+        # Finder litter is not worth quarantining, but it still counts as non-empty.
+        if '.DS_Store' in entries:
+            try:
+                os.remove(os.path.join(self.mount_path, '.DS_Store'))
+                entries.remove('.DS_Store')
+            except OSError:
+                pass
+
+        if not entries:
+            return True
+
+        quarantine = f"{self.mount_path}_stray_{time.strftime('%Y%m%d_%H%M%S')}"
+        try:
+            os.rename(self.mount_path, quarantine)
+            os.makedirs(self.mount_path, exist_ok=True)
+        except OSError as e:
+            logging.error(f"Failed to quarantine stray mount point contents: {e}")
+            return False
+
+        logging.critical(
+            f"Mount point {self.mount_path} was not empty while unmounted - moved "
+            f"{len(entries)} entry/entries to {quarantine}. Those files were written "
+            f"while the mount was down and exist ONLY there: copy them back onto the "
+            f"mount once it is up, then delete the quarantine directory."
+        )
+        return True
+
+    def check_mount_health(self) -> bool:
+        """Check if rclone mount is healthy and accessible.
+
+        Filesystem access happens in a child process with a timeout: a hung
+        FUSE mount blocks stat() forever, which would wedge this monitor too.
+        """
+        marker_file = os.path.join(self.mount_path, "AIHR-FGW-TEST-SIGNLAB (Projectfolder)", "do_not_remove_for_rclone")
+        try:
+            result = subprocess.run(['ls', marker_file], capture_output=True, timeout=20)
+            if result.returncode != 0:
                 logging.warning(f"rclone marker file not found: {marker_file}")
                 return False
-            
-            # Additionally verify the mount is responsive
-            test_path = os.path.join(self.mount_path, "AIHR-FGW-TEST-SIGNLAB (Projectfolder)")
-            if not os.path.exists(test_path):
-                logging.warning(f"Expected directory not found in mount: {test_path}")
-                return False
-            
-            # Try to access files to ensure mount is responsive
-            try:
-                contents = os.listdir(test_path)
-                # Verify we can see some expected content (not just empty local directory)
-                if not contents:
-                    logging.warning(f"Mount directory appears empty, may be unmounted: {test_path}")
-                    return False
-                return True
-            except (OSError, PermissionError) as e:
-                logging.warning(f"Mount appears unresponsive: {e}")
-                return False
-                
+            return True
+        except subprocess.TimeoutExpired:
+            logging.warning("Mount appears hung: marker check timed out")
+            return False
         except Exception as e:
             logging.error(f"Error checking mount health: {e}")
             return False
+
+    def rclone_making_progress(self) -> bool:
+        """True if rclone has written to its log recently.
+
+        A quiet marker check is not enough to declare rclone dead: while it drains
+        a vfs write-back backlog it can hold unsaved data that only exists in the
+        local cache, so killing it risks stalling those uploads indefinitely.
+        """
+        try:
+            age = time.time() - os.path.getmtime(self.rclone_log)
+        except OSError:
+            return False
+        return age < self.rclone_active_window
 
     def restart_rclone_if_mount_failed(self):
         """Restart rclone service if mount is unhealthy"""
@@ -176,6 +277,12 @@ class ProcessMonitor:
                 break
         
         if rclone_service:
+            if not self.network_ready():
+                logging.warning("Mount unhealthy but DNS is down - waiting for network instead of restarting rclone")
+                return
+            if self.rclone_making_progress():
+                logging.warning("Mount unhealthy but rclone is still uploading - not restarting")
+                return
             logging.warning("Mount unhealthy - restarting rclone service")
             self.restart_service(rclone_service)
             
@@ -241,14 +348,19 @@ class ProcessMonitor:
     def start_service(self, service: dict) -> Optional[subprocess.Popen]:
         """Start a single service"""
         try:
-            # Special handling for rclone - umount first
+            # Special handling for rclone - never mount without DNS, and never
+            # mount on top of a leftover (possibly dead) mount.
             if service['name'] == 'rclone':
-                try:
-                    logging.info("Attempting to unmount /Users/signlab/signCollect before starting rclone")
-                    subprocess.run(['umount', '-f', '/Users/signlab/signCollect'], 
-                                 check=False, capture_output=True, timeout=30)
-                except Exception as e:
-                    logging.warning(f"Umount failed (this is normal if not mounted): {e}")
+                if not self.network_ready():
+                    logging.warning("Not starting rclone: WebDAV host does not resolve yet - the mount check will retry")
+                    return None
+                logging.info(f"Ensuring {self.mount_path} is unmounted before starting rclone")
+                if not self.ensure_unmounted():
+                    logging.error("Refusing to start rclone: mount point still mounted after forced unmounts - a stacked mount would hang the system")
+                    return None
+                if not self.quarantine_stray_mountpoint():
+                    logging.error("Refusing to start rclone: mount point is not empty and could not be cleared - rclone cannot mount over it")
+                    return None
             
             logging.info(f"Starting service: {service['name']}")
             
@@ -281,6 +393,8 @@ class ProcessMonitor:
             
             self.processes[service['name']] = process
             logging.info(f"Service {service['name']} started with PID {process.pid}")
+            if service['name'] == 'rclone':
+                self.rclone_started_at = time.time()
             return process
         except Exception as e:
             logging.error(f"Failed to start service {service['name']}: {e}")
@@ -349,7 +463,9 @@ class ProcessMonitor:
                             logging.warning(f"Error closing log file for {name}: {log_error}")
                     
                     os.killpg(os.getpgid(old_process.pid), signal.SIGTERM)
-                    old_process.wait(timeout=10)
+                    # Same reasoning as stop_all_services: give rclone room to
+                    # unmount rather than orphaning the mount point.
+                    old_process.wait(timeout=90 if name in self.scheduled_restart_skip else 10)
                 except:
                     pass
             del self.processes[name]
@@ -387,9 +503,12 @@ class ProcessMonitor:
         # Stop all services gracefully
         logging.info("Stopping all services for scheduled restart...")
         for name, process in list(self.processes.items()):
+            if name in self.scheduled_restart_skip:
+                logging.info(f"Leaving {name} running through scheduled restart")
+                continue
             try:
                 logging.info(f"Stopping service: {name}")
-                
+
                 # Close log file handle if it exists
                 if hasattr(process, '_log_handle') and process._log_handle:
                     try:
@@ -409,8 +528,12 @@ class ProcessMonitor:
                 except:
                     pass
         
-        # Clear the processes dictionary
-        self.processes.clear()
+        # Clear the processes dictionary, keeping any service we deliberately
+        # left running so start_all_services does not launch a second copy.
+        self.processes = {
+            name: process for name, process in self.processes.items()
+            if name in self.scheduled_restart_skip
+        }
         
         # Clear restart history for all services (fresh start)
         self.restart_timestamps.clear()
@@ -432,6 +555,10 @@ class ProcessMonitor:
         """Start all configured services"""
         logging.info("Starting all services...")
         for service in self.services:
+            existing = self.processes.get(service['name'])
+            if existing is not None and existing.poll() is None:
+                logging.info(f"Service {service['name']} already running - not starting a second copy")
+                continue
             self.start_service(service)
             time.sleep(1)  # Stagger startup
 
@@ -451,9 +578,17 @@ class ProcessMonitor:
                     # Continue monitoring after restart
                     continue
                 
-                # Check mount health periodically
+                # Check mount health periodically, but leave rclone alone while it
+                # is still coming up - killing it mid-startup is how the mount ends
+                # up permanently down.
                 if current_time - self.last_mount_check >= self.mount_check_interval:
-                    if not self.check_mount_health():
+                    rclone_age = current_time - self.rclone_started_at
+                    if self.rclone_started_at and rclone_age < self.rclone_grace_period:
+                        logging.info(
+                            f"Skipping mount check - rclone started {int(rclone_age)}s ago "
+                            f"(grace period {self.rclone_grace_period}s)"
+                        )
+                    elif not self.check_mount_health():
                         self.restart_rclone_if_mount_failed()
                     self.last_mount_check = current_time
                 
@@ -497,9 +632,11 @@ class ProcessMonitor:
                         process._log_handle.close()
                     except Exception as log_error:
                         logging.warning(f"Error closing log file for {name}: {log_error}")
-                
+
                 os.killpg(os.getpgid(process.pid), signal.SIGTERM)
-                process.wait(timeout=10)
+                # rclone needs long enough to unmount cleanly; SIGKILLing it mid
+                # flush leaves a dead FUSE mount that blocks every later remount.
+                process.wait(timeout=90 if name in self.scheduled_restart_skip else 10)
                 logging.info(f"Service {name} stopped")
             except Exception as e:
                 logging.warning(f"Error stopping {name}: {e}")
@@ -578,7 +715,7 @@ if __name__ == "__main__":
     try:
         # Log scheduled restart times
         restart_times_str = ", ".join([f"{h:02d}:{m:02d}" for h, m in monitor.restart_times])
-        logging.info(f"Scheduled daily restart times: {restart_times_str}")
+        logging.info(f"Scheduled daily restart times: {restart_times_str or 'disabled'}")
         
         monitor.start_all_services()
         monitor.monitor_services()
