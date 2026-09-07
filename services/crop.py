@@ -328,30 +328,83 @@ def reencode_with_ffmpeg(input_file, output_file=None):
 def upload_video(video_path):
     """Upload the video to the processing server"""
     upload_url = "https://signcollect.nl/videoProc/upload_post.php"
-    
+
     if not os.path.exists(video_path):
         print(f"Error: Video file not found at {video_path}")
         return False
-    
+
     try:
         print(f"Uploading video: {video_path}")
         filename = os.path.basename(video_path)
-        
+
         # Create form data with the video file
         files = {'video': (filename, open(video_path, 'rb'), 'video/mp4')}
-        
+
         # Send the POST request with SSL verification disabled
         response = requests.post(upload_url, files=files, verify=False)
-        
+
         if response.status_code == 200:
             print(f"Upload successful: {response.text}")
             return True
         else:
             print(f"Upload failed with status code {response.status_code}: {response.text}")
             return False
-    
+
     except Exception as e:
         print(f"Upload error: {str(e)}")
+        return False
+
+
+def generate_thumbnail(video_path, thumbnail_path):
+    """Extract a midpoint frame as JPG thumbnail. Returns True on success."""
+    try:
+        probe = subprocess.run(
+            ["/opt/homebrew/bin/ffprobe", "-v", "error",
+             "-show_entries", "format=duration",
+             "-of", "default=nw=1:nk=1", video_path],
+            capture_output=True, text=True, timeout=30)
+        duration = float(probe.stdout.strip()) if probe.returncode == 0 and probe.stdout.strip() else 0
+    except Exception:
+        duration = 0
+    midpoint = duration / 2 if duration > 0 else 1
+
+    cmd = ["/opt/homebrew/bin/ffmpeg", "-y", "-loglevel", "quiet",
+           "-i", video_path, "-ss", str(midpoint),
+           "-vframes", "1", thumbnail_path]
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+        ok = r.returncode == 0 and os.path.exists(thumbnail_path)
+        if ok:
+            print(f"Thumbnail generated: {thumbnail_path}")
+        else:
+            print(f"Thumbnail generation failed for {video_path}: {r.stderr[:200]}")
+        return ok
+    except Exception as e:
+        print(f"Thumbnail ffmpeg failed for {video_path}: {e}")
+        return False
+
+
+def upload_thumbnail(thumbnail_path):
+    """Upload a JPG thumbnail to the processing server (same endpoint as upload_video)."""
+    upload_url = "https://signcollect.nl/videoProc/upload_post.php"
+
+    if not os.path.exists(thumbnail_path):
+        print(f"Error: Thumbnail file not found at {thumbnail_path}")
+        return False
+
+    try:
+        print(f"Uploading thumbnail: {thumbnail_path}")
+        filename = os.path.basename(thumbnail_path)
+        files = {'thumbnail': (filename, open(thumbnail_path, 'rb'), 'image/jpeg')}
+        response = requests.post(upload_url, files=files, verify=False)
+        if response.status_code == 200:
+            print(f"Thumbnail upload successful: {response.text}")
+            return True
+        else:
+            print(f"Thumbnail upload failed with status code {response.status_code}: {response.text}")
+            return False
+    except Exception as e:
+        print(f"Thumbnail upload error: {e}")
         return False
 
 def save_error_json(video_path, error_message, error_type="processing_error"):
@@ -414,10 +467,20 @@ def process_video_file(input_file, output_file, temp_dir=None):
         # Re-encode with ffmpeg using h264
         reencoded_file = reencode_with_ffmpeg(output_file)
         
-        # If re-encoding succeeded, upload the video
+        # If re-encoding succeeded, upload the video and then generate/upload a thumbnail
         if reencoded_file:
             upload_success = upload_video(reencoded_file)
             if upload_success:
+                # Thumbnail lives alongside the cropped video in post/, named after the
+                # original (non-_h264) basename so the server can key off source filename.
+                reencoded_dir = os.path.dirname(reencoded_file)
+                reencoded_stem = os.path.splitext(os.path.basename(reencoded_file))[0]
+                base_stem = reencoded_stem[:-len("_h264")] if reencoded_stem.endswith("_h264") else reencoded_stem
+                thumbnail_path = os.path.join(reencoded_dir, f"{base_stem}.jpg")
+                if generate_thumbnail(reencoded_file, thumbnail_path):
+                    upload_thumbnail(thumbnail_path)
+                else:
+                    print(f"Skipping thumbnail upload for {reencoded_file} (generation failed)")
                 print(f"Video processing complete for {input_file}")
             else:
                 print(f"Failed to upload {reencoded_file}")
@@ -535,7 +598,7 @@ def main():
     # base_dir = Path("/Users/gomerotterspeer/drs/landscape")    # Loop through each parent directory in base_dir (e.g., "2025-03-01")
     # homedir = Path("/Users/gomerotterspeer/")
 
-    print(f"Processing date directories from the past 2 weeks")
+    print(f"Processing date directories from the past 62 days")
 
     for subdir in sorted(os.listdir(base_dir), reverse=True):
         date_dir = os.path.join(base_dir, subdir)
@@ -549,8 +612,8 @@ def main():
             # Skip directories that don't match date format
             continue
 
-        # Only process folders from the past 31 days
-        if dir_date < datetime.now() - timedelta(days=31):
+        # Only process folders from the past 62 days
+        if dir_date < datetime.now() - timedelta(days=62):
             continue
         
         input_folder = os.path.join(date_dir, "post_noncropped")

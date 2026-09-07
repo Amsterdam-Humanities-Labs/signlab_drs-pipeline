@@ -1,10 +1,19 @@
-import os, sys, glob, shutil, time, json, subprocess, re, gc, argparse
+import os, sys, glob, shutil, time, json, subprocess, re, gc, argparse, resource
 from datetime import datetime, timedelta
 sys.path.insert(0, '/Users/signlab/drs/shared')
 from python_get_resolve import GetResolve
 from pathlib import Path
 from video_api_client import VideoAPIClient  # Import the API client
 from signcollect_monitor import SignCollectMonitor  # Import the monitor client
+
+# Raise open file descriptor limit to avoid "Too many open files" errors during a
+# long single-pass overwrite run (BATCH_LIMIT was removed in this variant).
+try:
+    _soft, _hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+    resource.setrlimit(resource.RLIMIT_NOFILE, (min(65536, _hard), _hard))
+    print(f"File descriptor limit raised to {min(65536, _hard)}")
+except Exception as e:
+    print(f"Could not raise file descriptor limit: {e}")
 
 # Filter state populated by __main__ (argparse). main() reads these to decide which files to re-render.
 FILTER_TARGET_DATE = None     # e.g. "2026-04-14"

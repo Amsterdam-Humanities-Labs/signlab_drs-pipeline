@@ -249,6 +249,12 @@ def get_recent_raw_files(days_back=30):
         if raw_files:
             print(f"Found {len(raw_files)} raw files for {date_str}")
             all_files.append((raw_files, post_noncropped_dir, date_yyyymmdd))
+        else:
+            # A raw folder holding only A/B footage looks identical to a fully
+            # processed date unless we say so. 2026-07-08 sat unnoticed for a
+            # month this way while its L/M/R files were stuck in staging.
+            other = len([f for f in raw_dir.glob("*.MP4")])
+            print(f"No L/M/R raw files for {date_str} ({other} other .MP4 present in raw)")
 
     return all_files
 
@@ -511,11 +517,11 @@ def main():
         print("Mount is not healthy. Exiting.")
         return
 
-    # 1. Get files from the past 2 days
-    recent_files = get_recent_raw_files(days_back=31)
+    # 1. Get files from the past 62 days
+    recent_files = get_recent_raw_files(days_back=62)
 
     if not recent_files:
-        print("No raw files found for the past 2 days.")
+        print("No raw files found for the past 62 days.")
         return
 
     # 2. Collect all files to process across all days
@@ -587,20 +593,26 @@ def get_keyboard_idle_seconds():
         print(f"Could not read idle time: {e}")
     return None
 
-IDLE_THRESHOLD = 30 * 60  # 30 minutes in seconds
+# Minutes of keyboard/mouse inactivity required before a batch run starts.
+# Default 0 = start immediately; set BATCH_IDLE_MINUTES to restore the old
+# wait-for-idle behavior (e.g. BATCH_IDLE_MINUTES=30).
+IDLE_THRESHOLD = int(os.environ.get('BATCH_IDLE_MINUTES', '0')) * 60
 
 def wait_for_inactivity():
-    """Wait until keyboard/mouse has been idle for 30+ minutes"""
+    """Wait until keyboard/mouse has been idle long enough (no-op when disabled)"""
+    if IDLE_THRESHOLD <= 0:
+        print("Idle wait disabled - starting batch run immediately")
+        return
     idle = get_keyboard_idle_seconds()
     if idle is None:
         print("Cannot read idle time, proceeding anyway")
         return
 
     if idle >= IDLE_THRESHOLD:
-        print(f"User idle for {idle/60:.0f} min (>30 min) - proceeding")
+        print(f"User idle for {idle/60:.0f} min (>{IDLE_THRESHOLD/60:.0f} min) - proceeding")
         return
 
-    print(f"User active (idle {idle/60:.1f} min) - waiting for 30 min inactivity...")
+    print(f"User active (idle {idle/60:.1f} min) - waiting for {IDLE_THRESHOLD/60:.0f} min inactivity...")
     while True:
         time.sleep(60)
         idle = get_keyboard_idle_seconds()

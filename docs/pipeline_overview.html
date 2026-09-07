@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>DRS Studio Pipeline Overview</title>
+<style>
+  @page { size: A4; margin: 14mm 12mm; }
+  * { box-sizing: border-box; }
+  body { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; color: #1a1a2e; margin: 0; font-size: 10.5px; }
+  h1 { font-size: 24px; margin: 0 0 2px; color: #16213e; }
+  h2 { font-size: 15px; margin: 0 0 10px; color: #16213e; border-bottom: 2px solid #0f3460; padding-bottom: 4px; }
+  .subtitle { color: #555; font-size: 11px; margin-bottom: 14px; }
+  .page { page-break-after: always; }
+  .page:last-child { page-break-after: auto; }
+
+  /* ===== Flowchart ===== */
+  .flow { display: flex; flex-direction: column; align-items: center; }
+  .stage { width: 100%; display: flex; justify-content: center; align-items: stretch; gap: 10px; }
+  .node {
+    border-radius: 8px; padding: 7px 12px; text-align: center;
+    border: 1.5px solid; min-width: 200px; max-width: 330px;
+  }
+  .node .name { font-weight: 700; font-size: 11.5px; }
+  .node .svc  { font-size: 9px; font-weight: 600; letter-spacing: .4px; text-transform: uppercase; opacity: .75; }
+  .node .desc { font-size: 9px; color: #333; margin-top: 2px; }
+  .node .path { font-family: Menlo, monospace; font-size: 8px; color: #0f3460; margin-top: 2px; }
+
+  .capture  { background: #fdf0e0; border-color: #e8943a; }
+  .storage  { background: #e8f0fe; border-color: #4a7fd4; }
+  .process  { background: #e6f6ea; border-color: #3fa55c; }
+  .upload   { background: #f3e8fd; border-color: #9b59d0; }
+  .side     { background: #fef9e0; border-color: #d4b53a; }
+
+  .arrow { color: #0f3460; font-size: 13px; line-height: 1; padding: 2px 0; text-align: center; }
+  .arrow .lbl { font-size: 8px; color: #666; font-style: italic; }
+
+  .branchrow { display: flex; gap: 10px; justify-content: center; margin-top: 4px; }
+  .legend { display: flex; gap: 14px; justify-content: center; margin: 10px 0 12px; font-size: 9px; }
+  .legend span { display: inline-flex; align-items: center; gap: 4px; }
+  .swatch { width: 12px; height: 12px; border-radius: 3px; border: 1.5px solid; display: inline-block; }
+
+  /* ===== Tables ===== */
+  table { border-collapse: collapse; width: 100%; margin-bottom: 14px; table-layout: fixed; }
+  td, th { overflow-wrap: break-word; }
+  th { background: #0f3460; color: #fff; text-align: left; padding: 5px 7px; font-size: 9.5px; }
+  td { border: 1px solid #ccd5e0; padding: 5px 7px; vertical-align: top; font-size: 9px; }
+  tr:nth-child(even) td { background: #f4f7fb; }
+  td.svcname { font-weight: 700; font-family: Menlo, monospace; font-size: 8.5px; overflow-wrap: anywhere; }
+  code { font-family: Menlo, monospace; font-size: 8px; background: #eef2f7; padding: 1px 3px; border-radius: 3px; overflow-wrap: anywhere; word-break: break-all; }
+
+  .twocol { display: flex; gap: 16px; }
+  .twocol > div { flex: 1; }
+  .note { background: #eef4fb; border-left: 3px solid #4a7fd4; padding: 7px 10px; font-size: 9px; margin-bottom: 12px; }
+</style>
+</head>
+<body>
+
+<!-- ================= PAGE 1 : FLOWCHART ================= -->
+<div class="page">
+  <h1>Sign Language Studio — Video Processing Pipeline</h1>
+  <div class="subtitle">DRS automation system &nbsp;·&nbsp; /Users/signlab/drs &nbsp;·&nbsp; orchestrated by <b>startupScript.py</b> (12 services, auto-restart, scheduled restarts 06:00 &amp; 20:00) &nbsp;·&nbsp; generated 2026-06-10</div>
+
+  <div class="legend">
+    <span><i class="swatch capture"></i> Capture</span>
+    <span><i class="swatch storage"></i> Storage / transfer</span>
+    <span><i class="swatch process"></i> Processing</span>
+    <span><i class="swatch upload"></i> Upload to signcollect.nl</span>
+    <span><i class="swatch side"></i> Parallel branch</span>
+  </div>
+
+  <div class="flow">
+    <div class="stage"><div class="node capture">
+      <div class="svc">A — Capture</div>
+      <div class="name">Sony cameras (L / M / R / A / B)</div>
+      <div class="desc">Multi-angle recording; RemoteCli + Node server download files from the cameras</div>
+      <div class="path">/Volumes/cacheDisk/signCollect/studioFiles/&lt;date&gt;/raw/*.MP4</div>
+    </div></div>
+
+    <div class="arrow">▼ <span class="lbl">rsync, every 15 min, waits 5 min after downloads finish (moveFiles.py)</span></div>
+
+    <div class="stage"><div class="node storage">
+      <div class="svc">B — Central storage</div>
+      <div class="name">rclone cloud mount</div>
+      <div class="desc">Remote <b>signcollect:</b> mounted locally; all later stages read &amp; write here</div>
+      <div class="path">/Users/signlab/signCollect/…/studioFiles/&lt;date&gt;/raw/</div>
+    </div></div>
+
+    <div class="arrow">▼ <span class="lbl">batch_queue.py copies ≤50 files to local import/ and drives DaVinci Resolve</span></div>
+
+    <div class="stage"><div class="node process">
+      <div class="svc">C — Professional edit</div>
+      <div class="name">DaVinci Resolve render (batch_queue.py)</div>
+      <div class="desc">Timeline per video, Fusion comp (green-screen removal, background), render to export/</div>
+      <div class="path">import/ → export/ → …/&lt;date&gt;/post_noncropped/</div>
+    </div></div>
+
+    <div class="arrow">▼ <span class="lbl">crop.py picks up rendered videos</span></div>
+
+    <div class="stage"><div class="node process">
+      <div class="svc">D — AI cropping</div>
+      <div class="name">MediaPipe pose crop (crop.py)</div>
+      <div class="desc">Detects signer pose, auto-rotates tilted footage, crops 1440×1252 around the signer, re-encodes (h264), makes thumbnail</div>
+      <div class="path">…/&lt;date&gt;/post_cropped/ + thumbnails/</div>
+    </div></div>
+
+    <div class="arrow">▼ <span class="lbl">HTTP upload</span></div>
+
+    <div class="stage"><div class="node upload">
+      <div class="svc">E — Publish</div>
+      <div class="name">signcollect.nl</div>
+      <div class="desc">Cropped video + thumbnail posted to <b>videoProc/upload_post.php</b></div>
+    </div></div>
+
+    <div class="arrow" style="margin-top:6px">— parallel branches reading from the same storage —</div>
+
+    <div class="branchrow">
+      <div class="node side">
+        <div class="svc">Branch 1 — convertFiles.py</div>
+        <div class="name">H.264 web conversion</div>
+        <div class="desc">raw/ → ffmpeg (libx264 + aac) → converted/ + thumbnail → upload to <b>upload2.php</b>. Hourly.</div>
+      </div>
+      <div class="node side">
+        <div class="svc">Branch 2 — qr_scanner_service.py</div>
+        <div class="name">QR detection</div>
+        <div class="desc">Scans thumbnails/ (last 7 days) with QReader + pyzbar; results to <b>qr/qrResultReceiver.php</b>. Every 15 min.</div>
+      </div>
+      <div class="node side">
+        <div class="svc">Branch 3 — listFiles.py</div>
+        <div class="name">Inventory &amp; coverage report</div>
+        <div class="desc">Counts files per camera, checks L/M/R completeness + glosId coverage; posts to <b>listFiles.php</b>. Hourly.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= PAGE 2 : PIPELINE SERVICES ================= -->
+<div class="page">
+  <h2>Pipeline services — what each one does</h2>
+  <table>
+    <tr><th style="width:110px">Service</th><th style="width:200px">Purpose</th><th>Reads from</th><th>Writes / sends to</th><th style="width:70px">Schedule</th></tr>
+    <tr>
+      <td class="svcname">moveFiles.py</td>
+      <td>Moves freshly downloaded camera files from the local cache disk into the cloud mount, organized into date folders parsed from the filename (e.g. <code>R20250527_1851.MP4</code>).</td>
+      <td><code>/Volumes/cacheDisk/…/&lt;date&gt;/raw/</code>; WebSocket (port 8081) download events</td>
+      <td><code>signCollect mount …/&lt;date&gt;/raw/</code> via rsync</td>
+      <td>Every 15 min</td>
+    </tr>
+    <tr>
+      <td class="svcname">batch_queue.py</td>
+      <td>Drives DaVinci Resolve: builds a timeline per raw video, applies the Fusion composition (<code>config/Settings.setting</code>) for green-screen removal and background replacement, renders in batches of ≤50. Writes <code>.skip</code> markers for failed files.</td>
+      <td>mount <code>…/raw/</code> → local <code>import/</code></td>
+      <td>local <code>export/</code> → mount <code>…/post_noncropped/</code></td>
+      <td>Continuous</td>
+    </tr>
+    <tr>
+      <td class="svcname">crop.py</td>
+      <td>AI cropping: extracts frames, runs MediaPipe pose detection to find the signer (head-to-waist bounds, nose-centered), corrects camera tilt, crops to 1440×1252, re-encodes with ffmpeg, generates a thumbnail, and uploads the result.</td>
+      <td>mount <code>…/post_noncropped/</code>; temp frames in <code>temp/frames_*</code> (auto-cleanup &gt;1 h / &gt;10 GB)</td>
+      <td>mount <code>…/post_cropped/</code> + <code>thumbnails/</code>; upload → <code>upload_post.php</code></td>
+      <td>Continuous</td>
+    </tr>
+    <tr>
+      <td class="svcname">convertFiles.py</td>
+      <td>Web-friendly conversion of the raw recordings: ffmpeg libx264/aac/yuv420p baseline profile + a thumbnail taken at the 50% mark, then upload.</td>
+      <td>mount <code>…/raw/</code> (skips dates that already have <code>converted/</code>)</td>
+      <td>mount <code>…/converted/</code> + <code>thumbnails/</code>; upload → <code>upload2.php</code></td>
+      <td>Hourly</td>
+    </tr>
+    <tr>
+      <td class="svcname">qr_scanner_service.py</td>
+      <td>Scans thumbnails for QR codes (used to link recordings to session/sign IDs) with a 4-worker pool (QReader + pyzbar). Remembers what it already scanned.</td>
+      <td>mount <code>…/thumbnails/*.jpg</code> (last 7 days); state in <code>qr/scanned_files.json</code></td>
+      <td>upload → <code>qr/qrResultReceiver.php</code></td>
+      <td>Every 15 min</td>
+    </tr>
+    <tr>
+      <td class="svcname">listFiles.py</td>
+      <td>Quality/completeness reporting: counts files per camera (L/M/R/A/B) for the last 10 dates, verifies all cameras recorded equally, computes glosId coverage against the expected list from <code>CR.php</code>.</td>
+      <td>mount <code>…/raw/</code> + sidecar JSONs; cache in <code>logs/glosids_cache/</code></td>
+      <td>POST inventory JSON → <code>listFiles.php</code></td>
+      <td>Hourly</td>
+    </tr>
+  </table>
+
+  <div class="note"><b>How the stages chain:</b> each stage is decoupled — services don't call each other. They watch directories on the shared rclone mount and act when new files appear: <code>raw/</code> → (Resolve) → <code>post_noncropped/</code> → (MediaPipe) → <code>post_cropped/</code>. That makes the pipeline self-healing: if a stage was down, it simply catches up on the backlog when restarted.</div>
+</div>
+
+<!-- ================= PAGE 3 : INFRASTRUCTURE ================= -->
+<div class="page">
+  <h2>Infrastructure &amp; support services</h2>
+  <table>
+    <tr><th style="width:130px">Service</th><th>Purpose</th><th style="width:160px">Notes</th></tr>
+    <tr><td class="svcname">startupScript.py</td><td>Orchestrator: starts all 12 services, monitors them every 5 s, auto-restarts crashes (max 5 restarts / 5 min, then 15-min cooldown), checks rclone mount health every 60 s, full restart of everything daily at 06:00 and 20:00.</td><td>Logs to <code>startup.log</code> + per-service <code>logs/*.log</code> (10 MB rotation)</td></tr>
+    <tr><td class="svcname">watchdog.sh</td><td>Watches the orchestrator itself via its PID file and relaunches it within 30 s if it dies — the last line of defense.</td><td><code>startup.pid</code>, <code>watchdog.log</code></td></tr>
+    <tr><td class="svcname">rclone mount</td><td>Mounts the remote <code>signcollect:</code> storage at <code>/Users/signlab/signCollect</code> with full VFS caching (up to 4 TB on <code>/Volumes/cacheDisk/rclone</code>, 5 s write-back). All pipeline stages read/write through this mount.</td><td>Health-checked via marker file; auto-remounted on failure</td></tr>
+    <tr><td class="svcname">startServer_beta.js</td><td>Express + WebSocket server for camera communication: notifies clients when camera downloads complete (<code>fileDownloaded</code> events that moveFiles.py listens for) and streams/serves video files for preview.</td><td>HTTP :8080, WebSocket :8081</td></tr>
+    <tr><td class="svcname">network_manager.py</td><td>Keeps the studio Mac reachable: tests internet connectivity every 30 s, restarts ethernet (en0) on loss, restarts Tailscale after boot.</td><td>Required for rclone + uploads</td></tr>
+    <tr><td class="svcname">mouse.py</td><td>Moves the mouse slightly every 60 s to prevent macOS screen lock / sleep, which would interrupt DaVinci Resolve rendering.</td><td>pyautogui</td></tr>
+    <tr><td class="svcname">keyboard_monitor.py</td><td>Tracks real keyboard activity (ignoring the simulated mouse) so the system can tell an actual operator apart from automation.</td><td>Writes <code>last_keyboard_activity.txt</code></td></tr>
+  </table>
+
+  <div class="twocol">
+    <div>
+      <h2>Key directories</h2>
+      <table>
+        <tr><th>Path</th><th>Role</th></tr>
+        <tr><td><code>/Volumes/cacheDisk/…/studioFiles/</code></td><td>Camera download landing zone (local disk)</td></tr>
+        <tr><td><code>/Users/signlab/signCollect/…/studioFiles/</code></td><td>Cloud mount — central store, one folder per date</td></tr>
+        <tr><td><code>&lt;date&gt;/raw/</code></td><td>Original camera files + sidecar JSON</td></tr>
+        <tr><td><code>&lt;date&gt;/post_noncropped/</code></td><td>After DaVinci Resolve render</td></tr>
+        <tr><td><code>&lt;date&gt;/post_cropped/</code></td><td>Final AI-cropped videos</td></tr>
+        <tr><td><code>&lt;date&gt;/converted/</code> + <code>thumbnails/</code></td><td>Web H.264 copies + preview images</td></tr>
+        <tr><td><code>drs/import/</code> · <code>drs/export/</code></td><td>Local Resolve staging in/out</td></tr>
+        <tr><td><code>drs/temp/</code></td><td>MediaPipe frame extraction (auto-cleaned)</td></tr>
+        <tr><td><code>drs/logs/</code></td><td>Per-service logs, 10 MB rotation</td></tr>
+      </table>
+    </div>
+    <div>
+      <h2>External integrations</h2>
+      <table>
+        <tr><th>Endpoint / tool</th><th>Used for</th></tr>
+        <tr><td><code>signcollect.nl/videoProc/upload_post.php</code></td><td>Final cropped video + thumbnail upload (crop.py)</td></tr>
+        <tr><td><code>signcollect.nl/videoProc/upload2.php</code></td><td>Converted H.264 + thumbnail upload (convertFiles.py)</td></tr>
+        <tr><td><code>signcollect.nl/qr/qrResultReceiver.php</code></td><td>QR scan results (qr_scanner_service.py)</td></tr>
+        <tr><td><code>signcollect.nl/listFiles.php</code></td><td>File inventory &amp; coverage report (listFiles.py)</td></tr>
+        <tr><td><code>signcollect.nl/CR.php</code></td><td>Expected glosId list per date (listFiles.py)</td></tr>
+        <tr><td>SignCollect monitor API</td><td>Heartbeats from every service (uptime dashboard)</td></tr>
+        <tr><td>DaVinci Resolve API</td><td>Timeline creation, Fusion comps, rendering</td></tr>
+        <tr><td>MediaPipe / OpenCV / ffmpeg</td><td>Pose detection, cropping, encoding</td></tr>
+        <tr><td>rclone (<code>signcollect:</code> remote)</td><td>Cloud storage mount</td></tr>
+      </table>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

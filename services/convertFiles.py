@@ -72,14 +72,26 @@ def run_ffmpeg_command(command):
         return False
 
 def get_video_duration(file_path):
-    """Get video duration using ffprobe"""
-    ffprobe_command = f'ffprobe -v error -select_streams v:0 -show_entries stream=duration -of default=noprint_wrappers=1:nokey=1 "{file_path}"'
+    """Get video duration using ffprobe.
+
+    Uses the absolute ffprobe path: a bare `ffprobe` resolves against the
+    supervisor's PATH, which lacks /opt/homebrew/bin when startupScript is
+    launched at boot. That failed silently and returned 0, so every thumbnail
+    fell back to a hardcoded 1s instead of the midpoint - and at 1s the QR
+    monitor is often still blank, which is what broke QR matching. Reads
+    format=duration (always present) rather than stream=duration.
+    """
     try:
-        result = subprocess.run(ffprobe_command, shell=True, capture_output=True, text=True)
-        if result.returncode == 0:
+        result = subprocess.run(
+            ["/opt/homebrew/bin/ffprobe", "-v", "error",
+             "-show_entries", "format=duration",
+             "-of", "default=noprint_wrappers=1:nokey=1", file_path],
+            capture_output=True, text=True, timeout=30)
+        if result.returncode == 0 and result.stdout.strip():
             return float(result.stdout.strip())
+        print(f"ffprobe could not read duration for {file_path}: rc={result.returncode} {result.stderr.strip()[:120]}")
     except Exception as e:
-        print(f"ffprobe command failed: {e}")
+        print(f"ffprobe command failed for {file_path}: {e}")
     return 0
 
 def is_valid_filename(filename):

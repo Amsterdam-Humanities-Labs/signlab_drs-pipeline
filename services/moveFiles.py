@@ -22,6 +22,13 @@ last_download_time = 0
 DOWNLOAD_COOLDOWN = 5 * 60  # 5 minutes after last download before moving files
 WS_URL = "ws://localhost:8081"
 
+# fx30_controller.py is the primary staging -> research drive mover. This service
+# runs as a gap-filler alongside it: it copies anything the controller left behind
+# (e.g. a sync that dies mid-camera, as happened to 2026-07-08) without ever
+# deleting from staging, since the controller treats staging as authoritative.
+# SETTLE_SECONDS keeps us off files either process may still be writing.
+SETTLE_SECONDS = 10 * 60
+
 
 def websocket_listener():
     """Listen for download events from startServer_beta.js via WebSocket"""
@@ -45,9 +52,9 @@ def websocket_listener():
             pass
 
     def on_close(ws, close_status_code, close_msg):
+        # Just log here. Reconnection is handled by the loop in start_websocket()
+        # so we never recurse back into run_forever (which would overflow the stack).
         print("WebSocket disconnected. Reconnecting in 10s...")
-        time.sleep(10)
-        start_websocket()
 
     def on_error(ws, error):
         print(f"WebSocket error: {error}")
@@ -56,19 +63,23 @@ def websocket_listener():
         print(f"WebSocket connected to {WS_URL}")
 
     def start_websocket():
-        try:
-            ws = websocket.WebSocketApp(
-                WS_URL,
-                on_message=on_message,
-                on_close=on_close,
-                on_error=on_error,
-                on_open=on_open,
-            )
-            ws.run_forever()
-        except Exception as e:
-            print(f"WebSocket connection failed: {e}. Retrying in 30s...")
-            time.sleep(30)
-            start_websocket()
+        # Reconnect in a loop rather than recursively, so a long-running
+        # service that reconnects many times never builds up call-stack frames.
+        while True:
+            try:
+                ws = websocket.WebSocketApp(
+                    WS_URL,
+                    on_message=on_message,
+                    on_close=on_close,
+                    on_error=on_error,
+                    on_open=on_open,
+                )
+                ws.run_forever()
+                # run_forever returns when the socket closes; wait, then loop to reconnect.
+                time.sleep(10)
+            except Exception as e:
+                print(f"WebSocket connection failed: {e}. Retrying in 30s...")
+                time.sleep(30)
 
     start_websocket()
 
@@ -172,51 +183,85 @@ def check_mount_health(mount_path):
         return False
 
 def move_files():
-    source_base = "/Volumes/cacheDisk/signCollect/studioFiles"
+    source_base = "/Volumes/cacheDisk/fx30_staging"
     target_base = "/Users/signlab/signCollect/AIHR-FGW-TEST-SIGNLAB (Projectfolder)/studioFiles"
-    
+
     if not os.path.exists(source_base):
         print(f"Source directory not found: {source_base}")
         return
-    
+
     # Check if target mount is available before proceeding
     mount_base = "/Users/signlab/signCollect"
     if not check_mount_health(mount_base):
         print(f"Target mount not available or unresponsive: {mount_base}")
         print("Skipping this cycle - rclone mount may be down")
         return
-    
-    moved_count = 0
+
+    copied_count = 0
+    skipped_count = 0
+    inflight_count = 0
     error_count = 0
-    
+    now = time.time()
+
     # Recursively scan for files
     for root, dirs, files in os.walk(source_base):
         # Only process files in 'raw' folders
         if not root.endswith('/raw'):
             continue
-            
+
         for filename in files:
             # Extract date from filename
             date_str = extract_date_from_filename(filename)
             if not date_str:
                 continue
-                
+
             source_file = os.path.join(root, filename)
-            
+
             # Create target directory structure
             target_dir = os.path.join(target_base, date_str, "raw")
             target_file = os.path.join(target_dir, filename)
-            
+
             try:
+                source_size = os.path.getsize(source_file)
+
+                # Never let an empty source overwrite a good destination. Files are
+                # routed by the date in their name, not the folder they sit in, so a
+                # 0-byte stub in one date folder can target a complete file that was
+                # copied from another (staging/2026-06-09 holds such a stub for
+                # M20260609_1801.MP4, whose real copy lives under 2026-06-10).
+                if source_size == 0:
+                    print(f"Skipping zero-byte source: {source_file}")
+                    skipped_count += 1
+                    continue
+
+                # Leave freshly written files alone - the camera download or the
+                # controller's own copy may still be in progress.
+                if now - os.path.getmtime(source_file) < SETTLE_SECONDS:
+                    inflight_count += 1
+                    continue
+
+                if os.path.exists(target_file):
+                    target_size = os.path.getsize(target_file)
+                    if target_size == source_size:
+                        skipped_count += 1
+                        continue
+                    # Size mismatch: either a partial copy from a run that died, or
+                    # the controller writing it right now. Only touch it once it has
+                    # gone quiet, so we never race the primary mover.
+                    if now - os.path.getmtime(target_file) < SETTLE_SECONDS:
+                        inflight_count += 1
+                        continue
+                    print(f"Re-copying incomplete {filename} ({target_size} != {source_size} bytes)")
+
                 # Create target directory if it doesn't exist
                 os.makedirs(target_dir, exist_ok=True)
-                
-                # Copy the file using rsync and then remove source (mimic move behavior)
+
+                # Copy only - fx30_controller treats staging as authoritative and
+                # its per-day .synced.txt ledger assumes the source still exists.
                 rsync_copy(source_file, target_file)
-                os.remove(source_file)
-                print(f"Moved: {filename} -> {date_str}/raw/")
-                moved_count += 1
-                
+                print(f"Copied: {filename} -> {date_str}/raw/")
+                copied_count += 1
+
             except OSError as e:
                 error_message = str(e)
                 if "rsync failed" in error_message:
@@ -226,13 +271,14 @@ def move_files():
                         print(f"Mount appears to be down during operation. Stopping batch.")
                         break
                 else:
-                    print(f"File system error moving {filename}: {e}")
+                    print(f"File system error copying {filename}: {e}")
                 error_count += 1
             except Exception as e:
-                print(f"Unexpected error moving {filename}: {e}")
+                print(f"Unexpected error copying {filename}: {e}")
                 error_count += 1
-    
-    print(f"\nSummary: {moved_count} files moved, {error_count} errors")
+
+    print(f"\nSummary: {copied_count} files copied, {skipped_count} already present, "
+          f"{inflight_count} skipped as in-flight, {error_count} errors")
 
 if __name__ == "__main__":
     # Register with monitoring system
@@ -254,8 +300,8 @@ if __name__ == "__main__":
             print(f"\n=== Starting file move operation at {time.strftime('%Y-%m-%d %H:%M:%S')} ===")
             move_files()
             print(f"=== File move operation completed at {time.strftime('%Y-%m-%d %H:%M:%S')} ===")
-            print("Sleeping for 24 hours until next run...")
-            time.sleep(1 * 60 * 15)  # Sleep for 1 hour (3600 seconds)
+            print("Sleeping for 15 minutes until next run...")
+            time.sleep(1 * 60 * 15)  # Sleep for 15 minutes
         except KeyboardInterrupt:
             print("\nService stopped by user")
             break

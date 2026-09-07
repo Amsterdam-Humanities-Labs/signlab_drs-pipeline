@@ -9,6 +9,7 @@ import time
 import sys
 import os
 import socket
+import json
 import argparse
 from datetime import datetime
 sys.path.insert(0, '/Users/signlab/drs/shared')
@@ -23,22 +24,33 @@ monitor = SignCollectMonitor(
 )
 
 class NetworkManager:
-    ADMIN_PASSWORD = "SignL@b2"
-    
     def __init__(self, ethernet_interface="en0", check_interval=30):
         self.ethernet_interface = ethernet_interface
         self.check_interval = check_interval
         self.tailscale_restart_on_boot = True
+        self._tailscale_cmd = None  # Cached path to the Tailscale binary
+        # Sudo runs non-interactively and relies on /etc/sudoers.d/signlab-network
+        # (NOPASSWD for the exact ifconfig/Tailscale commands). If that rule is
+        # missing, disable sudo-based fixes instead of failing every cycle.
+        self.sudo_disabled = False
         
     def run_command(self, command, shell=True, use_sudo_password=False):
         """Run a shell command and return output"""
         try:
             if use_sudo_password and command.strip().startswith('sudo'):
-                # Insert -S flag after sudo and pipe password
-                command = command.replace('sudo ', 'sudo -S ', 1)
-                command = f"echo '{self.ADMIN_PASSWORD}' | {command}"
-            
+                if self.sudo_disabled:
+                    return False, "", "sudo disabled: no passwordless sudo rule available"
+                # Never pipe a password: -n makes sudo fail immediately instead
+                # of prompting, so a missing sudoers rule can't hang the loop
+                # or rack up failed authentications that lock the account.
+                command = command.replace('sudo ', 'sudo -n ', 1)
+
             result = subprocess.run(command, shell=shell, capture_output=True, text=True)
+            if use_sudo_password and 'password is required' in (result.stderr or '').lower():
+                self.sudo_disabled = True
+                print(f"[{datetime.now()}] Passwordless sudo not configured - disabling all "
+                      f"sudo-based fixes. Install /etc/sudoers.d/signlab-network with "
+                      f"NOPASSWD rules for ifconfig and Tailscale to re-enable them.", flush=True)
             return result.returncode == 0, result.stdout.strip(), result.stderr.strip()
         except Exception as e:
             return False, "", str(e)
@@ -101,6 +113,89 @@ class NetworkManager:
         
         return True
     
+    def find_tailscale_cmd(self):
+        """Locate and cache the Tailscale binary path (empty string if none)."""
+        if self._tailscale_cmd is not None:
+            return self._tailscale_cmd
+        for path in [
+            "/Applications/Tailscale.app/Contents/MacOS/Tailscale",  # macOS app bundle
+            "tailscale",                 # If in PATH
+            "/opt/homebrew/bin/tailscale",  # Homebrew (Apple Silicon)
+            "/usr/local/bin/tailscale",  # Homebrew (Intel)
+            "/usr/bin/tailscale",        # Common Linux location
+        ]:
+            success, _, _ = self.run_command(f"{path} version")
+            if success:
+                self._tailscale_cmd = path
+                return path
+        self._tailscale_cmd = ""  # Cache the miss so we don't probe every cycle
+        return ""
+
+    def check_tailscale_connected(self):
+        """Robustly determine whether Tailscale is actually on the tailnet.
+
+        Uses `tailscale status --json` and requires BOTH the backend to be
+        Running AND this node to be seen Online by the control plane. This
+        catches the post-reboot case where the backend is up but hung while
+        reconnecting (which the human-readable string parse can miss).
+        """
+        cmd = self.find_tailscale_cmd()
+        if not cmd:
+            return False
+        success, output, _ = self.run_command(f"{cmd} status --json")
+        if not success or not output:
+            return False
+        try:
+            data = json.loads(output)
+        except (ValueError, TypeError):
+            return False
+        backend = data.get("BackendState")
+        online = data.get("Self", {}).get("Online", False)
+        return backend == "Running" and bool(online)
+
+    def tailscale_up(self):
+        """Bring Tailscale up (a gentle nudge, no down first)."""
+        cmd = self.find_tailscale_cmd()
+        if not cmd:
+            print("Error: Could not find Tailscale binary")
+            return False
+        success, _, error = self.run_command(f"sudo {cmd} up", use_sudo_password=True)
+        if not success:
+            print(f"Error bringing Tailscale up: {error}")
+        return success
+
+    def ensure_tailscale_connected(self, max_attempts=4):
+        """Make sure Tailscale is connected to the tailnet, escalating until it is.
+
+        Mirrors the manual recovery that works in the studio: first nudge
+        Tailscale up, then fully restart it, then toggle ethernet (down/up)
+        before bringing Tailscale up again. Bounded per cycle - the monitor
+        loop retries on the next pass if it still hasn't connected.
+        """
+        if self.check_tailscale_connected():
+            return True
+
+        print(f"[{datetime.now()}] Tailscale not on tailnet - starting recovery...")
+        for attempt in range(1, max_attempts + 1):
+            if attempt == 1:
+                print(f"[{datetime.now()}] Tailscale recovery attempt {attempt}: 'tailscale up'")
+                self.tailscale_up()
+            elif attempt == 2:
+                print(f"[{datetime.now()}] Tailscale recovery attempt {attempt}: restart Tailscale")
+                self.restart_tailscale()
+            else:
+                print(f"[{datetime.now()}] Tailscale recovery attempt {attempt}: toggle ethernet + Tailscale up")
+                self.toggle_ethernet("restart")  # down/up en0 - this is what usually unsticks it
+                self.tailscale_up()
+
+            time.sleep(8)  # Give the backend time to settle and reach the control plane
+            if self.check_tailscale_connected():
+                print(f"[{datetime.now()}] Tailscale reconnected to tailnet (attempt {attempt}).")
+                return True
+
+        print(f"[{datetime.now()}] Tailscale still not on tailnet after {max_attempts} attempts - will retry next cycle.")
+        return False
+
     def check_tailscale_status(self):
         """Check if Tailscale is running and connected"""
         # Try different possible Tailscale binary locations
@@ -174,9 +269,11 @@ class NetworkManager:
         print(f"  - Tailscale: {tailscale_status}")
         
         issues_fixed = False
-        
-        # Fix ethernet if needed
-        if not ethernet_active:
+
+        # Only touch ethernet when there is actually no internet: the studio
+        # deliberately runs on Wi-Fi with ethernet unplugged, and forcing en0
+        # up every cycle just burns sudo attempts.
+        if not internet_connected and not ethernet_active:
             # If ethernet is disabled, enable it
             print(f"[{datetime.now()}] Ethernet interface disabled, enabling it...")
             self.toggle_ethernet("on")
@@ -220,9 +317,17 @@ class NetworkManager:
             else:
                 print(f"[{datetime.now()}] Still no internet connectivity, may need manual intervention")
         
+        # Ensure Tailscale is actually on the tailnet, independent of general
+        # internet connectivity. Covers the common post-reboot case where the
+        # machine has working internet but Tailscale hung while reconnecting.
+        if internet_connected and not self.check_tailscale_connected():
+            print(f"[{datetime.now()}] Internet OK but Tailscale not on tailnet - recovering...")
+            self.ensure_tailscale_connected()
+            issues_fixed = True
+
         if not issues_fixed:
             print(f"[{datetime.now()}] All systems operational")
-        
+
         return internet_connected
     
     def monitor_loop(self):
@@ -284,35 +389,28 @@ class NetworkManager:
         self.fix_connectivity_issues()
     
     def test_sudo_password(self):
-        """Test sudo password authentication"""
-        print(f"Testing sudo password authentication...")
-        print(f"Using password: {self.ADMIN_PASSWORD}")
-        
-        # Test simple sudo command that doesn't affect system
+        """Test that the passwordless sudo rules this service relies on work."""
+        print("Testing passwordless sudo (expects /etc/sudoers.d/signlab-network)...")
+
         test_commands = [
-            "sudo -S whoami",
-            "sudo -S echo 'Test successful'",
-            f"sudo -S ifconfig {self.ethernet_interface}",
-            f"sudo -S ifconfig {self.ethernet_interface} down",
-            f"sudo -S ifconfig {self.ethernet_interface} up"
+            f"sudo ifconfig {self.ethernet_interface} up",
+            "sudo /Applications/Tailscale.app/Contents/MacOS/Tailscale up",
         ]
-        
+
         for cmd in test_commands:
             print(f"\nTesting command: {cmd}")
             success, output, error = self.run_command(cmd, use_sudo_password=True)
             print(f"Success: {success}")
-            print(f"Output: {output}")
+            if output:
+                print(f"Output: {output}")
             if error:
                 print(f"Error: {error}")
-        
-        # Also test the raw echo command format
-        raw_cmd = f"echo '{self.ADMIN_PASSWORD}' | sudo -S whoami"
-        print(f"\nTesting raw command: {raw_cmd}")
-        success, output, error = self.run_command(raw_cmd)
-        print(f"Raw command success: {success}")
-        print(f"Raw command output: {output}")
-        if error:
-            print(f"Raw command error: {error}")
+        if self.sudo_disabled:
+            print("\nPasswordless sudo is NOT configured - install the sudoers rule:")
+            print('  sudo sh -c \'echo "signlab ALL=(root) NOPASSWD: /sbin/ifconfig en0 up, '
+                  '/sbin/ifconfig en0 down, /Applications/Tailscale.app/Contents/MacOS/Tailscale up, '
+                  '/Applications/Tailscale.app/Contents/MacOS/Tailscale down" '
+                  '> /etc/sudoers.d/signlab-network && visudo -c\'')
 
 def main():
     parser = argparse.ArgumentParser(description='Network Connection Manager for macOS')

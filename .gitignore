@@ -67,3 +67,5 @@ videoframe_*.png
 vlcsnap-*.png
 yolo_debug_image.jpg
 firststep_debug_image.jpg
+*.log.[0-9]
+*.log.[0-9][0-9]
