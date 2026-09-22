@@ -5,6 +5,7 @@ from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import subprocess
 import logging
+import logging.handlers
 import shutil
 import os
 import psutil
@@ -19,7 +20,9 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('/web/helpScripts/move_videos.log'),
+        # 5 MB x 5, the same policy as setup_rotating_logger in the heartbeat client.
+        logging.handlers.RotatingFileHandler(
+            '/web/helpScripts/move_videos.log', maxBytes=5 * 1024 * 1024, backupCount=5),
         logging.StreamHandler()
     ]
 )

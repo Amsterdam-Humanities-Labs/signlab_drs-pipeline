@@ -8,12 +8,12 @@ import pyautogui
 import time
 import random
 import logging
+import logging.handlers
 import signal
 import sys
 import os
 import argparse
 import json
-from datetime import datetime
 
 # Configuration defaults
 DEFAULT_INTERVAL = 60  # seconds between movements
@@ -36,16 +36,15 @@ def setup_logging():
     
     log_file = os.path.join(LOG_DIR, "mouse.log")
     
-    # Check if log file needs rotation (>10MB)
-    if os.path.exists(log_file) and os.path.getsize(log_file) > 10 * 1024 * 1024:
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        os.rename(log_file, f"{log_file}.{timestamp}")
-    
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s - %(levelname)s - %(message)s',
         handlers=[
-            logging.FileHandler(log_file),
+            # 5 MB x 5, the same policy as setup_rotating_logger in the heartbeat client.
+            # Replaces a rename-on-start that only rotated between runs and
+            # never deleted the old files.
+            logging.handlers.RotatingFileHandler(
+                log_file, maxBytes=5 * 1024 * 1024, backupCount=5),
             logging.StreamHandler(sys.stdout)
         ]
     )
