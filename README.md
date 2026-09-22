@@ -1,5 +1,6 @@
 # signlab_drs
 Video pipeline on the DRS Mac: moves raw camera files to storage, renders them in DaVinci Resolve, crops with MediaPipe, converts and uploads to signcollect.nl.
+Operators: see [docs/manual.md](docs/manual.md) (session checklist, file locations, troubleshooting).
 
 ## What it does
 ```
