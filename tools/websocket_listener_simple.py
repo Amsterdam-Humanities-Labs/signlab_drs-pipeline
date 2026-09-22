@@ -7,6 +7,7 @@ Connects to localhost:8081 and logs all messages to both terminal and log file
 import websocket
 import json
 import logging
+import logging.handlers
 import sys
 import time
 import threading
@@ -17,7 +18,9 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('websocket_listener.log'),
+        # 5 MB x 5, the same policy as setup_rotating_logger in the heartbeat client.
+        logging.handlers.RotatingFileHandler(
+            'websocket_listener.log', maxBytes=5 * 1024 * 1024, backupCount=5),
         logging.StreamHandler(sys.stdout)
     ]
 )
