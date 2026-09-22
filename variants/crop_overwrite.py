@@ -25,6 +25,19 @@ FILTER_CAMERAS = None       # e.g. {"R"} or None to mean all of L/M/R
 FILTER_NUM_FROM = None      # e.g. 4541
 FILTER_NUM_TO = None        # e.g. 4559
 
+# ----- Crop framing constants -----
+# The crop bottom is anchored to the wrist rather than the hip. MediaPipe's hip
+# estimate carries a systematic per-camera bias (measured on 2026-09-14: the L
+# camera's hip lands ~64px lower than R's on the same signer), so the same sign
+# came out at noticeably different scales on L/M/R. Head->wrist distance is
+# consistent across the three angles to within 0.5%.
+#
+# WRIST_OFFSET is calibrated so the mean crop height is unchanged (1119px on the
+# 2026-09-14 sample): mean head->hip was 819px, mean head->wrist 644px.
+WRIST_OFFSET = 175
+# Below this visibility the wrist position is not trustworthy; fall back to hip.
+WRIST_MIN_VISIBILITY = 0.5
+
 # Ensure output is flushed immediately to logs
 sys.stdout.reconfigure(line_buffering=True)
 sys.stderr.reconfigure(line_buffering=True)
@@ -130,12 +143,31 @@ def get_vertical_bbox(frame_path):
 
 
         
-        # Midpoint calculation
-        midpoint_x = int((left_hip_x + right_hip_x) / 2)
-        waist_y = int((left_hip_y + right_hip_y) / 2)
+        # Wrist coordinates - these anchor the bottom of the crop (see WRIST_OFFSET).
+        left_wrist_y = lm[mp_pose.PoseLandmark.LEFT_WRIST].y * frame.shape[0]
+        right_wrist_y = lm[mp_pose.PoseLandmark.RIGHT_WRIST].y * frame.shape[0]
+        wrist_visibility = max(lm[mp_pose.PoseLandmark.LEFT_WRIST].visibility,
+                               lm[mp_pose.PoseLandmark.RIGHT_WRIST].visibility)
 
-        print(f"Head top: {head_top}, Waist Y: {waist_y}, Midpoint X: {midpoint_x}")
-        head_top = head_top - 300
+        # Midpoint calculation. midpoint_x stays hip-based: it drives both the
+        # horizontal centring and the tilt-correction rotation, and shoulder-vs-hip
+        # x differ by under 20px of 2160, so there is nothing to gain by moving it.
+        midpoint_x = int((left_hip_x + right_hip_x) / 2)
+        hip_y = int((left_hip_y + right_hip_y) / 2)
+
+        if wrist_visibility >= WRIST_MIN_VISIBILITY:
+            # Use the lower of the two wrists, so one raised hand on the first
+            # frame cannot pull the crop in tight.
+            waist_y = int(max(left_wrist_y, right_wrist_y) + WRIST_OFFSET)
+        else:
+            print(f"Wrist visibility {wrist_visibility:.3f} < {WRIST_MIN_VISIBILITY}; falling back to hip anchor")
+            waist_y = hip_y
+
+        # Keep the crop bounds inside the frame.
+        waist_y = max(1, min(waist_y, frame.shape[0]))
+
+        print(f"Head top: {head_top}, Bottom Y: {waist_y} (hip would be {hip_y}), Midpoint X: {midpoint_x}")
+        head_top = max(0, head_top - 300)
         print(f"Adjusted head top: {head_top}")
         return int(head_top), waist_y, frame.shape, midpoint_x, left_shoulder_x, right_shoulder_x, left_shoulder_y, right_shoulder_y, head_x, nose_x, nose_y
 
@@ -307,15 +339,24 @@ def reencode_with_ffmpeg(input_file, output_file=None):
         file_parts = os.path.splitext(input_file)
         output_file = f"{file_parts[0]}_h264{file_parts[1]}"
     
-    # Force overwrite: remove output_file if it exists.
-    if os.path.exists(output_file):
-        os.remove(output_file)
-    
+    # Encode to local disk first, then overwrite output_file in place.
+    #
+    # services/crop.py runs live and decides what to skip solely on whether
+    # <name>_h264.MP4 exists. The previous unlink-then-encode left that path
+    # missing for the whole encode, during which the live service could pick up a
+    # file this script is still working on and re-crop it with the old hip logic.
+    # Overwriting in place keeps the path present throughout. (Rename-over-existing
+    # is not an option: it fails with EIO on this rclone mount.)
+    local_tmp = os.path.join(
+        "/Users/signlab/drs/temp/",
+        f"reencode_{uuid.uuid4().hex}{os.path.splitext(output_file)[1]}"
+    )
+
     cmd = [
-        "/opt/homebrew/bin/ffmpeg", "-y", "-i", input_file, 
-        "-c:v", "libx264", "-preset", "medium", 
-        "-crf", "18", "-c:a", "copy", 
-        output_file
+        "/opt/homebrew/bin/ffmpeg", "-y", "-i", input_file,
+        "-c:v", "libx264", "-preset", "medium",
+        "-crf", "18", "-c:a", "copy",
+        local_tmp
     ]
     
     print(f"Re-encoding video with ffmpeg: {input_file}")
@@ -325,13 +366,18 @@ def reencode_with_ffmpeg(input_file, output_file=None):
     print("FFmpeg output:")
     print(subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE).stdout.decode())
 
-    # sys.exit()
-    if os.path.exists(output_file):
-        print(f"Re-encoding successful: {output_file}")
-        return output_file
-    else:
-        print(f"Re-encoding failed for {input_file}")
-        return None
+    try:
+        if os.path.exists(local_tmp) and os.path.getsize(local_tmp) > 0:
+            # copyfile truncates and rewrites; it never unlinks the destination.
+            shutil.copyfile(local_tmp, output_file)
+            print(f"Re-encoding successful: {output_file}")
+            return output_file
+        else:
+            print(f"Re-encoding failed for {input_file}")
+            return None
+    finally:
+        if os.path.exists(local_tmp):
+            os.remove(local_tmp)
 
 def upload_video(video_path):
     """Upload the video to the processing server"""
@@ -361,6 +407,59 @@ def upload_video(video_path):
     except Exception as e:
         print(f"Upload error: {str(e)}")
         return False
+
+def generate_thumbnail(video_path, thumbnail_path):
+    """Extract a midpoint frame as JPG thumbnail. Returns True on success."""
+    try:
+        probe = subprocess.run(
+            ["/opt/homebrew/bin/ffprobe", "-v", "error",
+             "-show_entries", "format=duration",
+             "-of", "default=nw=1:nk=1", video_path],
+            capture_output=True, text=True, timeout=30)
+        duration = float(probe.stdout.strip()) if probe.returncode == 0 and probe.stdout.strip() else 0
+    except Exception:
+        duration = 0
+    midpoint = duration / 2 if duration > 0 else 1
+
+    cmd = ["/opt/homebrew/bin/ffmpeg", "-y", "-loglevel", "quiet",
+           "-i", video_path, "-ss", str(midpoint),
+           "-vframes", "1", thumbnail_path]
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+        ok = r.returncode == 0 and os.path.exists(thumbnail_path)
+        if ok:
+            print(f"Thumbnail generated: {thumbnail_path}")
+        else:
+            print(f"Thumbnail generation failed for {video_path}: {r.stderr[:200]}")
+        return ok
+    except Exception as e:
+        print(f"Thumbnail ffmpeg failed for {video_path}: {e}")
+        return False
+
+
+def upload_thumbnail(thumbnail_path):
+    """Upload a JPG thumbnail to the processing server (same endpoint as upload_video)."""
+    upload_url = "https://signcollect.nl/videoProc/upload_post.php"
+
+    if not os.path.exists(thumbnail_path):
+        print(f"Error: Thumbnail file not found at {thumbnail_path}")
+        return False
+
+    try:
+        print(f"Uploading thumbnail: {thumbnail_path}")
+        filename = os.path.basename(thumbnail_path)
+        files = {'thumbnail': (filename, open(thumbnail_path, 'rb'), 'image/jpeg')}
+        response = requests.post(upload_url, files=files, verify=False)
+        if response.status_code == 200:
+            print(f"Thumbnail upload successful: {response.text}")
+            return True
+        else:
+            print(f"Thumbnail upload failed with status code {response.status_code}: {response.text}")
+            return False
+    except Exception as e:
+        print(f"Thumbnail upload error: {e}")
+        return False
+
 
 def save_error_json(video_path, error_message, error_type="processing_error"):
     """Save error information to a JSON file with the same basename as the video"""
@@ -422,10 +521,22 @@ def process_video_file(input_file, output_file, temp_dir=None):
         # Re-encode with ffmpeg using h264
         reencoded_file = reencode_with_ffmpeg(output_file)
         
-        # If re-encoding succeeded, upload the video
+        # If re-encoding succeeded, upload the video and then regenerate/upload the
+        # thumbnail. The thumbnail is cut from the re-cropped video, so leaving it
+        # alone would pair new framing with a stale thumbnail on the server.
         if reencoded_file:
             upload_success = upload_video(reencoded_file)
             if upload_success:
+                # Thumbnail lives alongside the cropped video in post/, named after the
+                # original (non-_h264) basename so the server can key off source filename.
+                reencoded_dir = os.path.dirname(reencoded_file)
+                reencoded_stem = os.path.splitext(os.path.basename(reencoded_file))[0]
+                base_stem = reencoded_stem[:-len("_h264")] if reencoded_stem.endswith("_h264") else reencoded_stem
+                thumbnail_path = os.path.join(reencoded_dir, f"{base_stem}.jpg")
+                if generate_thumbnail(reencoded_file, thumbnail_path):
+                    upload_thumbnail(thumbnail_path)
+                else:
+                    print(f"Skipping thumbnail upload for {reencoded_file} (generation failed)")
                 print(f"Video processing complete for {input_file}")
             else:
                 print(f"Failed to upload {reencoded_file}")
