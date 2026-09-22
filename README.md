@@ -1,166 +1,49 @@
-# DRS - Sign Language Video Production Pipeline
+# signlab_drs
+Video pipeline on the DRS Mac: moves raw camera files to storage, renders them in DaVinci Resolve, crops with MediaPipe, converts and uploads to signcollect.nl.
 
-Automated video processing system for sign language recordings. Captures multi-camera footage, processes through DaVinci Resolve, applies AI-based cropping, converts formats, and uploads to the SignCollect platform.
+## What it does
+```
+import/ -> moveFiles -> studioFiles/YYYY-MM-DD/raw/ -> batch_queue (Resolve) -> post_noncropped/
+        -> crop (MediaPipe, 1:1.15) -> post/ -> convertFiles (H.264 + thumbnail) -> signcollect.nl
+```
+Helpers: `listFiles` (file counts and glosId coverage to signcollect.nl), `mouse`/`keyboardMonitor` (keep awake, operator idle), `networkManager` (ethernet/Tailscale), `qrScanner`.
 
-## Running the System
+## Where it runs
+- DRS Mac, user `signlab`, checkout at `/Users/signlab/drs` (paths are hardcoded).
+- Storage: rclone mount `signcollect:` at `/Users/signlab/signCollect`, cache on `/Volumes/cacheDisk/rclone`.
+
+## Status
+Production.
+
+## How to run
+`startupScript.py` is the entry point. It starts and supervises these services (logs in `logs/<service>.log`, rotated at 10 MB):
+
+| Service | Command |
+|---|---|
+| mouse, keyboardMonitor, moveFiles, convertFiles, listFiles, networkManager | `/usr/bin/python3 services/<script>.py` |
+| batch | `/usr/bin/python3 services/batch_queue.py` |
+| crop | `/usr/bin/python3 services/crop.py` |
+| rclone | `/Users/signlab/rclone/rclone mount signcollect: /Users/signlab/signCollect ...` |
+| watchdog | `scripts/watchdog.sh` (restarts `startupScript.py` if the PID in `startup.pid` dies; rewritten on every launch) |
+| qrScanner | `bin/python3 qr/qr_scanner_service.py` (repo-root venv; `qr/` is not in git) |
 
 ```bash
-# Start all services (recommended)
-python startupScript.py
-
-# Or start individual services via screen sessions
-screen -S startup python startupScript.py
+cd /Users/signlab/drs
+/usr/bin/python3 startupScript.py        # or inside: screen -S startup ...
 ```
+- A crashed service is restarted, at most 5 times in 5 min, then paused for 15 min.
+- rclone is only started once DNS resolves and the mount point is unmounted and empty (stray files are quarantined); an unhealthy mount is restarted unless rclone is still writing its log.
+- Scheduled daily restarts are disabled (`restart_times = []`).
+- Not started by `startupScript.py`: `services/startServer_beta.js` (commented out), `services/crop_fix.py`, `services/startMonitor.py` (PyQt dashboard), `services/qrConvert.py`. `scripts/batch.sh` loops `variants/batch.py` by hand.
 
-## Root Entry Points
+## Configuration
+- rclone remote `signcollect:` in the `signlab` user's rclone config (not in git).
+- `/etc/sudoers.d/signlab-network`: passwordless sudo for `network_manager.py`.
+- `mouse_config.json` in the repo root (optional, see `config/mouse_config.json.example`).
+- DaVinci Fusion compositions in `config/*.setting`.
 
-| File | Description |
-|------|-------------|
-| `startupScript.py` | **Process orchestrator.** Starts and monitors all services below, with crash recovery, rate-limited restarts, scheduled daily restarts (6:00/20:00), rclone mount health checks, and per-service log rotation. |
-| `package.json` / `package-lock.json` | Node.js dependencies for `services/startServer_beta.js`. |
-| `CLAUDE.md`, `README.md` | Documentation. |
-
-## `services/` — Core Services
-
-These scripts run continuously via `startupScript.py` and are automatically restarted on crash.
-
-| Script | Description |
-|--------|-------------|
-| `services/startServer_beta.js` | **Express/WebSocket server.** Handles camera communication (L/M/R cameras), file uploads, download triggers, and broadcasts events (fileDownloaded, completedMultiple) to connected clients. Every log line is prefixed with an ISO UTC timestamp; `/recording` requests log the full body (state, cameraNumber, glosId) and every WebSocket broadcast logs its payload + connected-client count. |
-| `services/batch_queue.py` | **DaVinci Resolve rendering pipeline (queue-based).** Picks up raw camera files, applies Fusion compositions (green screen removal, gradient backgrounds via `config/Settings.setting`), renders to `post_noncropped/`, and registers results with the video API. Pauses cycles until keyboard/mouse idle 30+ min. |
-| `services/crop.py` | **MediaPipe AI cropping.** Detects signer pose in rendered videos, crops to center on the interpreter with consistent framing (1:1.15 ratio), generates thumbnails, and uploads final files. Runs as a continuous polling service. |
-| `services/crop_fix.py` | **Re-cropping service.** Monitors a crop-fix API queue for videos that need re-cropping (e.g., bad framing detected after initial crop). Runs in its own screen session. |
-| `services/moveFiles.py` | **File organizer.** Moves incoming camera files from `import/` to date-based directories on the rclone mount (`studioFiles/YYYY-MM-DD/raw/`). Listens to WebSocket download events and waits for a cooldown period before moving. |
-| `services/convertFiles.py` | **Format converter and uploader.** Converts cropped videos to H.264, generates thumbnails, and uploads both to the SignCollect server. |
-| `services/listFiles.py` | **File status reporter.** Periodically scans studioFiles directories, counts files per date/type (A/B/L/M/R `.MP4`), and POSTs to `signcollect.nl/listFiles.php`. Also fetches expected glosIds from `CR.php` and cross-checks them against L/M/R JSON sidecars, reporting `glosid_coverage` percentages per date. Sidecar reads are parallelized and cached locally at `logs/glosids_cache/<date>.json`. |
-| `services/mouse.py` | **Screen lock prevention.** Periodically moves the mouse cursor to keep macOS from going to sleep during long processing runs. |
-| `services/keyboard_monitor.py` | **Keyboard idle tracker.** Monitors keyboard input and writes timestamps to `last_keyboard_activity.txt`, used by other scripts to detect operator presence. |
-| `services/network_manager.py` | **Network watchdog.** Monitors ethernet connectivity and manages Tailscale VPN, automatically restarting network services when connectivity drops. |
-| `services/qrConvert.py` | **QR code processor.** Reads QR codes from video frames using multiple detection strategies (including partial QR reconstruction for cut-off codes), connects to MySQL for metadata lookup. |
-| `services/startMonitor.py` | **PyQt5 studio monitoring dashboard.** Camera hardware monitoring (USB device detection), system process status, file status dashboard, media formatting controls, and WebSocket-based real-time updates. Typically launched manually. |
-
-## `shared/` — Shared Libraries
-
-Imported by services, variants, and tools. Do not run directly. Every consuming script adds `/Users/signlab/drs/shared` to `sys.path` via a small shim at the top.
-
-| Script | Description |
-|--------|-------------|
-| `shared/python_get_resolve.py` | Returns a DaVinci Resolve scripting API object. Used by all batch processing scripts. |
-| `shared/video_api_client.py` | HTTP client for the video render management API (`signcollect.nl/renderServer`). Handles video registration, status updates, and metadata queries. |
-| `shared/signcollect_monitor.py` | Python client for the SignCollect monitoring API. Provides heartbeat registration, status reporting, and auto-heartbeat for all services. |
-| `shared/signcollect_monitor.js` | Node.js version of the monitoring client. Used by `services/startServer_beta.js`. |
-| `shared/drs_render_client.py` | Render coordination client for multi-machine setups. Claims/releases files via API so two DaVinci instances don't render the same file. |
-
-## `config/` — DaVinci and Service Config
-
-| File | Description |
-|------|-------------|
-| `config/Settings.setting` | Main DaVinci Resolve Fusion composition (portrait, green screen + gradient). |
-| `config/landscape.setting` | Fusion composition for landscape video processing. |
-| `config/tyd.setting` | Fusion composition for TYD (Thank You Deaf) project videos. |
-| `config/landscape_tyd.setting` | Fusion composition for landscape TYD videos. |
-| `config/mouse_config.json.example` | Template config for `services/mouse.py`. Copy to `mouse_config.json` in the drs root to override defaults. |
-
-## `scripts/` — Shell Scripts
-
-| Script | Description |
-|--------|-------------|
-| `scripts/watchdog.sh` | **Meta-watchdog.** Monitors the `startupScript.py` process itself and restarts it if it crashes. Auto-generated/overwritten by `startupScript.py` on launch. |
-| `scripts/batch.sh` | **Batch watchdog wrapper.** Runs `variants/batch.py` in a loop, restarting it after each exit and killing lingering DaVinci Resolve processes between runs. |
-| `scripts/claude-unlock.sh` | Unlocks the login keychain (helper for Claude Code sessions). |
-
-## `variants/` — Pipeline Variants
-
-Production variants of `batch.py` and `crop.py` for specific project types or processing modes. Not part of the continuous pipeline — invoked manually. All scripts insert the repo root into `sys.path` so they can import the shared libraries from root.
-
-### Batch Variants
-| Script | Description |
-|--------|-------------|
-| `variants/batch.py` | Original (non-queue) DaVinci batch pipeline. Used by `scripts/batch.sh` as a watchdog-restarted one-shot. |
-| `variants/batch_overwrite.py` | On-demand overwrite re-render for a specific date. `batch_overwrite.py YYYY-MM-DD [--cameras L,R,M] [--from NNNN] [--to NNNN]`. Ignores existing `post_noncropped/` output and rsync-overwrites in place (no pre-delete on rclone). Used when Fusion settings change and a previously rendered date needs redoing. |
-| `variants/batch_queue_api.py` | API-driven batch queue with multi-machine render coordination via `drs_render_client`. |
-| `variants/batch_queue_single.py` | Processes a single batch of files through the queue pipeline. Takes CLI arguments. |
-| `variants/batch_single.py` | Renders a hardcoded list of specific files through DaVinci Resolve. Edit `TARGET_FILES` before running. |
-| `variants/batch_all_2026.py` | One-time batch job to process all 2026 raw files. Configured for a second machine (`gomer`). |
-| `variants/batch_tyd.py` | DaVinci rendering for TYD (Thank You Deaf) project videos. |
-| `variants/batch_tyd_landscape.py` | DaVinci rendering for TYD landscape-format videos. |
-
-### Crop Variants
-| Script | Description |
-|--------|-------------|
-| `variants/crop_overwrite.py` | On-demand overwrite re-crop for a specific date. `crop_overwrite.py YYYY-MM-DD [--cameras L,R,M] [--from NNNN] [--to NNNN]`. Ignores existing `post/` output and lets cv2.VideoWriter + `ffmpeg -y` overwrite in place. Pairs with `batch_overwrite.py` when a date needs full reprocessing. |
-| `variants/crop_single.py` | Crops a hardcoded list of specific files. Edit target files before running. |
-| `variants/crop_landscape.py` | Cropping pipeline adapted for landscape-format videos. |
-| `variants/crop_tyd.py` | Cropping pipeline for TYD project videos. Uses YOLO in addition to MediaPipe. |
-
-## `tools/` — Utility Scripts
-
-One-off or manually-run tools for maintenance, reprocessing, and data recovery.
-
-### Reprocessing & Maintenance
-| Script | Description |
-|--------|-------------|
-| `tools/reprocess_all.py` | Reprocesses all videos from a JSON manifest with fixed 1440x1252 resolution. |
-| `tools/reprocess_all_fixes.py` | Reprocesses videos from the crop-fixes API with updated 1:1.15 ratio. |
-| `tools/reprocess_dimensions.py` | Reprocesses videos from `dimension_issues.json` that failed ratio checks. |
-| `tools/reprocess_videos.py` | Re-processes specific videos with scaled dimensions from a reference video. |
-| `tools/cleanup_and_recrop.py` | Deletes already-uploaded files, then re-crops preserved `post_noncropped` files via `crop_znn`. |
-| `tools/crop_znn.py` | Cropping variant used as a library by `cleanup_and_recrop.py`. |
-| `tools/crop_fix_request.py` | Crop fix helper used as a library by `reprocess_videos.py`. |
-| `tools/regen_thumbnails.py` | Force reconverts videos from raw and regenerates thumbnails for specific dates. |
-| `tools/rename_files.py` | Cleans up DaVinci Resolve filename suffixes in studioFiles directories. |
-| `tools/upload_rendered.py` | Uploads rendered files from `post_noncropped` to the video API. |
-| `tools/move_post_to_old.py` | Renames `post/` directories to `post_old/` for a date range. |
-| `tools/check_studiofiles.py` | Audits studioFiles directory structure and reports inconsistencies. |
-| `tools/decode_partial_qr.py` | Decodes QR codes with partially cut-off edges (e.g., monitor bezel cropping). |
-
-### Camera & WebSocket Tools
-| Script | Description |
-|--------|-------------|
-| `tools/camera_download_controller.py` | Automates camera download flow: reconnects cameras, triggers content mode, waits for file events, and starts downloads. |
-| `tools/websocket_listener.py` | Async WebSocket listener that logs all messages from `startServer_beta.js`. |
-| `tools/websocket_listener_simple.py` | Synchronous WebSocket listener using `websocket-client`. Simpler alternative. |
-
-## Directory Structure
-
-```
-drs/
-├── startupScript.py       # process orchestrator (root entry point)
-├── package.json           # npm for services/startServer_beta.js
-├── README.md, CLAUDE.md   # documentation
-├── services/              # long-running pipeline daemons
-├── shared/                # shared Python/JS libraries
-├── config/                # DaVinci Fusion compositions + service config
-├── scripts/               # shell scripts (watchdog, batch wrapper)
-├── variants/              # batch/crop variants for specific project types
-├── tools/                 # one-off maintenance and reprocessing utilities
-├── test/                  # unit and integration tests
-├── docs/                  # reference docs and server-side PHP/HTML files
-├── old/                   # archived backup scripts and DaVinci project dumps
-├── scratch/               # local debug debris (gitignored)
-├── import/                # video capture staging area
-├── export/                # DaVinci Resolve render output
-├── temp/                  # temporary processing files
-├── qr/                    # QR code scanner service
-├── logs/                  # per-service log files (auto-rotated at 10MB)
-├── sc/                    # secondary Python environment
-└── node_modules/          # Node.js dependencies
-```
-
-## Processing Workflow
-
-```
-Camera Capture  -->  import/  -->  moveFiles.py  -->  studioFiles/YYYY-MM-DD/raw/
-                                                            |
-                                                      batch.py (DaVinci Resolve)
-                                                            |
-                                                      post_noncropped/
-                                                            |
-                                                      crop.py (MediaPipe)
-                                                            |
-                                                      post/ (final cropped)
-                                                            |
-                                                      convertFiles.py (H.264 + upload)
-                                                            |
-                                                      signcollect.nl
-```
+## Dependencies
+- DaVinci Resolve (scripting API via `shared/python_get_resolve.py`).
+- signcollect.nl: `videoProc/upload*.php`, `renderServer`, `drs_ep/api.php` (render claims, `shared/drs_render_client.py`), `listFiles.php`, `CR.php`.
+- FX30 camera controller: [signlab_Sony-SDK-MACOS-API](https://github.com/Amsterdam-Humanities-Labs/signlab_Sony-SDK-MACOS-API).
+- Stack overview: https://github.com/Amsterdam-Humanities-Labs/signlab_signcollect-stack
