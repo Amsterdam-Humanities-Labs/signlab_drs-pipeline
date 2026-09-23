@@ -25,7 +25,8 @@ Production.
 
 | Service | Command |
 |---|---|
-| mouse, keyboardMonitor, moveFiles, convertFiles, listFiles, networkManager | `/usr/bin/python3 services/<script>.py` |
+| mouse, keyboardMonitor, moveFiles, convertFiles, listFiles | `/usr/bin/python3 services/<file>.py`: `mouse.py`, `keyboard_monitor.py`, `moveFiles.py`, `convertFiles.py`, `listFiles.py` |
+| networkManager | `/usr/bin/python3 -u services/network_manager.py` |
 | batch | `/usr/bin/python3 services/batch_queue.py` |
 | crop | `/usr/bin/python3 services/crop.py` |
 | rclone | `/Users/signlab/rclone/rclone mount signcollect: /Users/signlab/signCollect ...` |
@@ -42,6 +43,7 @@ cd /Users/signlab/drs
 - Scheduled daily restarts are off (`restart_times = []`).
 - `startupScript.py` does not start `services/startServer_beta.js` (commented out), `services/crop_fix.py`, `services/startMonitor.py` (a PyQt dashboard) or `services/qrConvert.py`.
 - `scripts/batch.sh` runs `variants/batch.py` in a loop. Start it by hand.
+- `tools/`: one-off repair and backfill scripts (the manual says when to use them). `variants/`: other batch and crop versions, run by hand. `test/`: tests, run with `python3 -m pytest test/`.
 
 ## Configuration
 - The rclone remote `signcollect:` lives in the rclone config of the `signlab` user (not in git).
@@ -51,6 +53,8 @@ cd /Users/signlab/drs
 
 ## Dependencies
 - DaVinci Resolve, through its scripting API (`shared/python_get_resolve.py`).
-- signcollect.nl endpoints: `videoProc/upload*.php`, `renderServer`, `drs_ep/api.php` (render claims, via `shared/drs_render_client.py`), `listFiles.php` and `CR.php`.
+- signcollect.nl endpoints: `videoProc/upload2.php` and `videoProc/upload_post.php`, `renderServer`, `drs_ep/api.php` (render claims, via `shared/drs_render_client.py`), `listFiles.php` and `CR.php`.
+- Heartbeats: `client_monitor_api/api.php` (via `shared/signcollect_monitor.py`), see [signlab_client_monitor_api](https://github.com/Amsterdam-Humanities-Labs/signlab_client_monitor_api).
+- `services/crop_fix.py` reads the re-crop queue from `videoFix/crop_fixes.json` and reports to `videoFix/api.php` ([signlab_videoFix](https://github.com/Amsterdam-Humanities-Labs/signlab_videoFix)).
 - FX30 camera controller: [signlab_Sony-SDK-MACOS-API](https://github.com/Amsterdam-Humanities-Labs/signlab_Sony-SDK-MACOS-API).
 - Stack overview: [signlab_signcollect-stack](https://github.com/Amsterdam-Humanities-Labs/signlab_signcollect-stack).
