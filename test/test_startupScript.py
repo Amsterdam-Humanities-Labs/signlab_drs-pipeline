@@ -78,41 +78,44 @@ class TestProcessMonitor(unittest.TestCase):
         self.assertIsNone(result)
         self.assertNotIn('test', self.monitor.processes)
         
-    @patch('startupScript.subprocess.run')
     @patch('startupScript.subprocess.Popen')
-    def test_start_rclone_service(self, mock_popen, mock_run):
-        """Test rclone service startup with unmount"""
+    def test_start_rclone_service(self, mock_popen):
+        """rclone starts only after DNS, unmount and empty-mountpoint checks pass"""
         mock_process = Mock()
         mock_process.pid = 12345
         mock_popen.return_value = mock_process
-        
-        # Mock the get_log_file_handle method to return a mock file
+
         mock_log_file = Mock()
-        with patch.object(self.monitor, 'get_log_file_handle', return_value=mock_log_file):
-            service = {
-                'name': 'rclone',
-                'command': ['rclone', 'mount', 'test:'],
-                'cwd': '/tmp'
-            }
-            
+        service = {'name': 'rclone', 'command': ['rclone', 'mount', 'test:'], 'cwd': '/tmp'}
+        with patch.object(self.monitor, 'get_log_file_handle', return_value=mock_log_file), \
+             patch.object(self.monitor, 'network_ready', return_value=True) as net, \
+             patch.object(self.monitor, 'ensure_unmounted', return_value=True) as unmount, \
+             patch.object(self.monitor, 'quarantine_stray_mountpoint', return_value=True) as clear:
             result = self.monitor.start_service(service)
-            
-            # Verify umount was called
-            mock_run.assert_called_once_with(
-                ['umount', '-f', '/Users/signlab/signCollect'],
-                check=False, capture_output=True, timeout=30
-            )
-            
-            self.assertEqual(result, mock_process)
-            self.assertEqual(self.monitor.processes['rclone'], mock_process)
-            
-            # Verify the new Popen call signature was used
-            mock_popen.assert_called_once()
-            call_args = mock_popen.call_args
-            self.assertEqual(call_args[0][0], ['rclone', 'mount', 'test:'])
-            self.assertEqual(call_args[1]['cwd'], '/tmp')
-            self.assertEqual(call_args[1]['stdout'], mock_log_file)
-        
+
+        net.assert_called_once()
+        unmount.assert_called_once()
+        clear.assert_called_once()
+        self.assertEqual(result, mock_process)
+        self.assertEqual(self.monitor.processes['rclone'], mock_process)
+        mock_popen.assert_called_once()
+        call_args = mock_popen.call_args
+        self.assertEqual(call_args[0][0], ['rclone', 'mount', 'test:'])
+        self.assertEqual(call_args[1]['cwd'], '/tmp')
+        self.assertEqual(call_args[1]['stdout'], mock_log_file)
+
+    @patch('startupScript.subprocess.Popen')
+    def test_start_rclone_service_waits_for_dns(self, mock_popen):
+        """No DNS for the WebDAV host -> rclone is not started (mounting would hang)"""
+        service = {'name': 'rclone', 'command': ['rclone', 'mount', 'test:'], 'cwd': '/tmp'}
+        with patch.object(self.monitor, 'network_ready', return_value=False), \
+             patch.object(self.monitor, 'ensure_unmounted') as unmount:
+            result = self.monitor.start_service(service)
+
+        self.assertIsNone(result)
+        unmount.assert_not_called()
+        mock_popen.assert_not_called()
+
     def test_check_process_running(self):
         """Test checking if process is running"""
         mock_process = Mock()
