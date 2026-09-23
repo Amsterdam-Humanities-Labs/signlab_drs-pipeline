@@ -1,34 +1,5 @@
-import cv2
-import mediapipe as mp
-from mediapipe.tasks import python
-from mediapipe.tasks.python import vision
-
-def on_pose (result, frame, timestamp):
-    print("pose received")
-
-print("initializing mediapipe...")
-
-base_options = python.BaseOptions(
-    delegate=python.BaseOptions.Delegate.GPU
-)
-
-options = vision.PoseLandmarkerOptions(
-    base_options=base_options,
-    running_mode=vision.RunningMode.LIVE_STREAM,
-    result_callback=on_pose
-)
-
-landmarker = vision.PoseLandmarker.create_from_options(options)
-
-print("retrieving a video frame...")
-
-cap = cv2.VideoCapture(0)
-ok, frame = cap.read()
-
-print("converting image...")
-
-mp_frame = mp.Image(image_format=mp.ImageFormat.SRGB, data=frame)
-
-print("pose detection...")
-
-landmarker.detect_async(mp_frame, 0)
+# Old name, kept so existing callers keep working (signlab_signcollect-stack#51).
+# Runs test/manual_mediapipe_gpu.py only when started as a script, so pytest collects nothing here.
+if __name__ == "__main__":
+    import os, runpy
+    runpy.run_path(os.path.join(os.path.dirname(os.path.abspath(__file__)), "manual_mediapipe_gpu.py"), run_name="__main__")
