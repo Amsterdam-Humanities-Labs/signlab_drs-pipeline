@@ -7,14 +7,8 @@ import sys
 
 # services/ and shared/ are put on sys.path by conftest.py
 
-# Mock the problematic imports before importing batch_queue
-with patch.dict('sys.modules', {
-    'video_api_client': MagicMock(),
-    'python_get_resolve': MagicMock(),
-    'requests': MagicMock()
-}):
-    # Import the functions from batch_queue (successor of batch.py)
-    from batch_queue import get_video_orientation, get_resolve_with_retry
+# The Resolve/API/monitor clients are stubbed in conftest.py
+from batch_queue import get_video_orientation, get_resolve_with_retry
 
 class TestBatchFunctions(unittest.TestCase):
     
@@ -49,7 +43,7 @@ class TestBatchFunctions(unittest.TestCase):
         self.assertEqual(rotation, 0)
         self.assertEqual(orientation, "portrait")
         mock_subprocess.assert_called_once_with(
-            ["mediainfo", "--Output=JSON", "/path/to/video.mp4"],
+            ["/opt/homebrew/bin/mediainfo", "--Output=JSON", "/path/to/video.mp4"],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
@@ -121,8 +115,8 @@ class TestBatchFunctions(unittest.TestCase):
         mock_result.stdout = '{"media": {"track": []}}'
         mock_subprocess.return_value = mock_result
         
-        # Mock JSON that will cause an exception
-        mock_json_loads.side_effect = Exception("JSON parsing error")
+        # mediainfo output without a Video track -> falls back to the default
+        mock_json_loads.return_value = {"media": {"track": [{"@type": "Audio"}]}}
         
         with patch('builtins.print') as mock_print:
             rotation, orientation = get_video_orientation("/path/to/video.mp4")
@@ -133,9 +127,9 @@ class TestBatchFunctions(unittest.TestCase):
         mock_print.assert_called_once()
     
     @patch('batch_queue.GetResolve')
-    @patch('batch_queue.os.system')
+    @patch('batch_queue.open_davinci_minimized')
     @patch('batch_queue.time.sleep')
-    def test_get_resolve_with_retry_success_first_try(self, mock_sleep, mock_os_system, mock_get_resolve):
+    def test_get_resolve_with_retry_success_first_try(self, mock_sleep, mock_open_davinci, mock_get_resolve):
         # Mock successful resolve connection on first try
         mock_resolve = MagicMock()
         mock_get_resolve.return_value = mock_resolve
@@ -143,13 +137,13 @@ class TestBatchFunctions(unittest.TestCase):
         result = get_resolve_with_retry(max_retries=3)
         
         self.assertEqual(result, mock_resolve)
-        mock_os_system.assert_not_called()
+        mock_open_davinci.assert_not_called()
         mock_sleep.assert_not_called()
     
     @patch('batch_queue.GetResolve')
-    @patch('batch_queue.os.system')
+    @patch('batch_queue.open_davinci_minimized')
     @patch('batch_queue.time.sleep')
-    def test_get_resolve_with_retry_success_after_retries(self, mock_sleep, mock_os_system, mock_get_resolve):
+    def test_get_resolve_with_retry_success_after_retries(self, mock_sleep, mock_open_davinci, mock_get_resolve):
         # Mock failed connection first two times, success on third
         mock_resolve = MagicMock()
         mock_get_resolve.side_effect = [None, None, mock_resolve]
@@ -158,15 +152,14 @@ class TestBatchFunctions(unittest.TestCase):
             result = get_resolve_with_retry(max_retries=3)
         
         self.assertEqual(result, mock_resolve)
-        self.assertEqual(mock_os_system.call_count, 2)  # Two retry attempts
+        self.assertEqual(mock_open_davinci.call_count, 2)  # Two retry attempts
         self.assertEqual(mock_sleep.call_count, 2)  # Two sleep calls
-        mock_os_system.assert_called_with("open -a 'DaVinci Resolve'")
         mock_sleep.assert_called_with(10)
     
     @patch('batch_queue.GetResolve')
-    @patch('batch_queue.os.system')
+    @patch('batch_queue.open_davinci_minimized')
     @patch('batch_queue.time.sleep')
-    def test_get_resolve_with_retry_max_retries_exceeded(self, mock_sleep, mock_os_system, mock_get_resolve):
+    def test_get_resolve_with_retry_max_retries_exceeded(self, mock_sleep, mock_open_davinci, mock_get_resolve):
         # Mock failed connection for all attempts
         mock_get_resolve.return_value = None
         
@@ -174,28 +167,27 @@ class TestBatchFunctions(unittest.TestCase):
             result = get_resolve_with_retry(max_retries=2)
         
         self.assertIsNone(result)
-        self.assertEqual(mock_os_system.call_count, 2)  # Two retry attempts
+        self.assertEqual(mock_open_davinci.call_count, 2)  # Two retry attempts
         self.assertEqual(mock_sleep.call_count, 2)  # Two sleep calls
 
 class TestBatchIntegration(unittest.TestCase):
-    """Integration tests for batch.py main functionality"""
+    """Integration tests for batch_queue.main()"""
     
-    @patch('batch_queue.get_resolve_with_retry')
-    def test_main_resolve_connection_failure(self, mock_get_resolve):
-        # Mock failed resolve connection
-        mock_get_resolve.return_value = None
-        
+    @patch('batch_queue.get_recent_raw_files')
+    @patch('batch_queue.verify_mount_health', return_value=False)
+    @patch('batch_queue.time.sleep')
+    @patch('batch_queue.os.system')
+    def test_main_exits_when_mount_unhealthy(self, mock_system, mock_sleep, mock_mount, mock_recent):
+        from batch_queue import main
         with patch('builtins.print') as mock_print:
-            from batch_queue import main
             main()
-        
-        # Should print failure message and return early
-        print_calls = [call[0][0] for call in mock_print.call_calls]
-        failure_messages = [msg for msg in print_calls if "Failed to open DaVinci Resolve" in msg]
-        self.assertGreater(len(failure_messages), 0)
+
+        printed = [c[0][0] for c in mock_print.call_args_list if c[0]]
+        self.assertIn("Mount is not healthy. Exiting.", printed)
+        mock_recent.assert_not_called()
 
 class TestBatchVideoProcessing(unittest.TestCase):
-    """Tests for video processing logic in batch.py"""
+    """Tests for video processing logic in batch_queue.py"""
     
     def test_date_validation_logic(self):
         # Test the date validation logic from batch.py
