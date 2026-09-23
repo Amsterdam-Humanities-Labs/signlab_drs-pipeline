@@ -1,4 +1,4 @@
-# signlab_drs
+# signlab_drs-pipeline
 The video pipeline on DRS, the studio Mac with the Sony FX30 cameras.
 Operators: read [docs/manual.md](docs/manual.md) for the session checklist, file locations and troubleshooting.
 
@@ -55,6 +55,6 @@ cd /Users/signlab/drs
 - DaVinci Resolve, through its scripting API (`shared/python_get_resolve.py`).
 - signcollect.nl endpoints: `videoProc/upload2.php` and `videoProc/upload_post.php`, `renderServer`, `drs_ep/api.php` (render claims, via `shared/drs_render_client.py`), `listFiles.php` and `CR.php`.
 - Heartbeats: `client_monitor_api/api.php` (via `shared/signcollect_monitor.py`), see [signlab_client_monitor_api](https://github.com/Amsterdam-Humanities-Labs/signlab_client_monitor_api).
-- `services/crop_fix.py` reads the re-crop queue from `videoFix/crop_fixes.json` and reports to `videoFix/api.php` ([signlab_videoFix](https://github.com/Amsterdam-Humanities-Labs/signlab_videoFix)).
+- `services/crop_fix.py` reads the re-crop queue from `videoFix/crop_fixes.json` and reports to `videoFix/api.php` ([signlab_crop-fix-manager](https://github.com/Amsterdam-Humanities-Labs/signlab_crop-fix-manager)).
 - FX30 camera controller: [signlab_Sony-SDK-MACOS-API](https://github.com/Amsterdam-Humanities-Labs/signlab_Sony-SDK-MACOS-API).
 - Stack overview: [signlab_signcollect-stack](https://github.com/Amsterdam-Humanities-Labs/signlab_signcollect-stack).
