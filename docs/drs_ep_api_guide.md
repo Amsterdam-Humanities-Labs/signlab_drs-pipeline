@@ -8,7 +8,7 @@ Coordinates rendering between multiple DaVinci Resolve machines so they don't re
 ## Setup
 
 1. Create directory `drs_ep/` on the server
-2. Upload `api.php` (the file `drs_ep_api.php` in this repo)
+2. Upload `api.php` (the PHP source is not in this repo)
 3. Make sure the directory is writable by the web server: `chmod 775 drs_ep/`
 4. Done — `render_claims.json` is created automatically on first use
 
