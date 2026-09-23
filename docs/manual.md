@@ -33,7 +33,7 @@ Heartbeats go to `https://signcollect.nl/client_monitor_api/api.php`. See [signl
 - [ ] Only one `fx30MultiRecord` is running (`pgrep -fl fx30MultiRecord`).
 
 ### During recording
-- [ ] Start and stop takes from Camera Control in studio_beta. It forwards the requests to `:8080`.
+- [ ] Start and stop takes from Camera Control in [signlab_camera-control](https://github.com/Amsterdam-Humanities-Labs/signlab_camera-control). It forwards the requests to `:8080`.
 - [ ] Do not use DaVinci Resolve on DRS by hand. `batch` runs `pkill -9 -f 'DaVinci Resolve'` at the start and end of every batch.
 - [ ] Do not start a second `fx30MultiRecord`. Only one process can hold the cameras on USB.
 
@@ -92,7 +92,7 @@ The pipeline routes each clip by the date in its file name, not by the folder it
 | crop `_error.json` says `pose_detection_failed` | Is a person in frame? | Every run tries again (the error JSON does not stop retries). TODO: confirm fix |
 | crop: "Date in filename ... does not match date in folder" | Compare the folder with `<L/M/R><YYYYMMDD>` | Move the clip to the folder for its date |
 | Cropped video or thumbnail is missing on the web | crop log says "Upload failed" | crop never retries uploads. Run `python3 tools/backfill_post_uploads.py <date> --dry-run`, then run it without `--dry-run` |
-| Clip has a QR JSON but is not on studioIndex | qrScanner could not reach the API | Run `python3 tools/replay_qr_results.py <date> --dry-run`, then run it without `--dry-run` |
+| Clip has a QR JSON but is not in [signlab_studio-archive](https://github.com/Amsterdam-Humanities-Labs/signlab_studio-archive) | qrScanner could not reach the API | Run `python3 tools/replay_qr_results.py <date> --dry-run`, then run it without `--dry-run` |
 | QR JSON is empty (`[]`) or missing | `raw/<clip>.json` | Run `python3 tools/qr_backfill.py "$SF/<date>/raw" --dry-run`. Add `--send-api` to send the results |
 | Cameras missing on `:8080` | Dashboard, USB cables | Send `POST /api/scan`, then `POST /api/reset`. If the API is down, start it by hand (see runbook) |
 | Screen locks or the Mac sleeps | `logs/mouse.log` | Check `~/drs/mouse_config.json` (see `config/mouse_config.json.example`) |
