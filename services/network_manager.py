@@ -388,7 +388,7 @@ class NetworkManager:
         print("=== Scenario 3: All Systems Operational ===")
         self.fix_connectivity_issues()
     
-    def test_sudo_password(self):
+    def check_passwordless_sudo(self):
         """Test that the passwordless sudo rules this service relies on work."""
         print("Testing passwordless sudo (expects /etc/sudoers.d/signlab-network)...")
 
@@ -418,7 +418,7 @@ def main():
     parser.add_argument('-t', '--interval', type=int, default=30, help='Check interval in seconds (default: 30)')
     parser.add_argument('-o', '--once', action='store_true', help='Run once and exit')
     parser.add_argument('-l', '--list', action='store_true', help='List available ethernet interfaces')
-    parser.add_argument('--test', action='store_true', help='Test sudo password authentication')
+    parser.add_argument('--test', action='store_true', help="Check the passwordless sudo rules (/etc/sudoers.d/signlab-network)")
     parser.add_argument('--test-logic', action='store_true', help='Test connectivity fix logic scenarios')
     
     args = parser.parse_args()
@@ -439,7 +439,7 @@ def main():
         sys.exit(0)
     
     if args.test:
-        manager.test_sudo_password()
+        manager.check_passwordless_sudo()
         sys.exit(0)
     
     if hasattr(args, 'test_logic') and args.test_logic:
