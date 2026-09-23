@@ -481,12 +481,27 @@ def process_videos_in_directory(directory_date_path, qreader):
 
     return qr_codes_output
 
-# MySQL configuration
+# MySQL configuration. Credentials come from the environment or the untracked
+# .env in the repo root (DB_HOST, DB_USER, DB_PASSWORD, DB_NAME). Never a literal.
+def _load_env() -> None:
+    env_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env')
+    try:
+        with open(env_file) as fh:
+            for line in fh:
+                line = line.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    key, value = line.split('=', 1)
+                    os.environ.setdefault(key.strip(), value.strip().strip('"\''))
+    except OSError:
+        pass
+
+
+_load_env()
 db_config = {
-    'host': 'signlab-db',
-    'user': 'user',
-    'password': 'CHeZeGa85W',
-    'database': 'admin_gebarenoverleg'
+    'host': os.getenv('DB_HOST', 'signlab-db'),
+    'user': os.getenv('DB_USER', 'user'),
+    'password': os.getenv('DB_PASSWORD', ''),
+    'database': os.getenv('DB_NAME', 'admin_gebarenoverleg'),
 }
 
 # Establish database connection
