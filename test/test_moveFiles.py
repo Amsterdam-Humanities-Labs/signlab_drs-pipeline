@@ -6,10 +6,8 @@ from unittest.mock import patch, MagicMock
 from pathlib import Path
 import sys
 
-# Add the parent directory to the path to import moveFiles
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+# services/ is put on sys.path by conftest.py
 
-# Import the functions from moveFiles
 from moveFiles import convert_date_format, extract_date_from_filename, move_files
 
 class TestMoveFiles(unittest.TestCase):
@@ -72,77 +70,57 @@ class TestMoveFiles(unittest.TestCase):
         # Clean up temporary directories
         shutil.rmtree(self.temp_dir)
     
-    @patch('moveFiles.os.path.exists')
-    @patch('moveFiles.os.walk')
-    @patch('moveFiles.os.makedirs')
-    @patch('moveFiles.shutil.move')
-    def test_move_files_success(self, mock_move, mock_makedirs, mock_walk, mock_exists):
-        # Mock the source directory exists
-        mock_exists.return_value = True
-        
-        # Mock os.walk to return our test files
-        mock_walk.return_value = [
-            ("/Volumes/cacheDisk/signCollect/studioFiles/2025-05-27/raw", [], ["R20250527_1851.MP4", "L20250527_1852.MP4"]),
-            ("/Volumes/cacheDisk/signCollect/studioFiles/2024-01-01/raw", [], ["M20240101_0000.MP4", "invalid_file.MP4"])
+    SOURCE = "/Volumes/cacheDisk/fx30_staging"
+
+    def _patch_fs(self, walk):
+        """Staging exists, targets do not, mount is healthy, files are old and non-empty."""
+        patches = [
+            patch('moveFiles.os.path.exists', side_effect=lambda p: p == self.SOURCE),
+            patch('moveFiles.os.walk', return_value=walk),
+            patch('moveFiles.os.makedirs'),
+            patch('moveFiles.os.path.getsize', return_value=100),
+            patch('moveFiles.os.path.getmtime', return_value=0),
+            patch('moveFiles.check_mount_health', return_value=True),
         ]
-        
-        # Mock successful move operations
-        mock_move.return_value = None
-        
-        # Capture print output
+        for p in patches:
+            p.start()
+            self.addCleanup(p.stop)
+
+    @patch('moveFiles.rsync_copy')
+    def test_move_files_success(self, mock_copy):
+        self._patch_fs([
+            (self.SOURCE + "/2025-05-27/raw", [], ["R20250527_1851.MP4", "L20250527_1852.MP4"]),
+            (self.SOURCE + "/2024-01-01/raw", [], ["M20240101_0000.MP4", "invalid_file.MP4"]),
+            (self.SOURCE + "/2024-01-01/other", [], ["M20240101_0001.MP4"]),
+        ])
+
         with patch('builtins.print') as mock_print:
             move_files()
-        
-        # Verify that move was called for valid files (3 files with valid date patterns)
-        self.assertEqual(mock_move.call_count, 3)  # R20250527, L20250527, M20240101
-        
-        # Verify makedirs was called
-        self.assertTrue(mock_makedirs.called)
-        
-        # Verify success messages were printed
-        print_calls = [call[0][0] if call[0] else '' for call in mock_print.call_calls]
-        success_messages = [msg for msg in print_calls if "Moved:" in str(msg)]
-        self.assertEqual(len(success_messages), 3)
-    
-    @patch('moveFiles.os.path.exists')
+
+        # Only files in raw/ folders with a date in the name are copied
+        self.assertEqual(mock_copy.call_count, 3)
+        print_calls = [c[0][0] if c[0] else '' for c in mock_print.call_args_list]
+        self.assertEqual(len([m for m in print_calls if "Copied:" in str(m)]), 3)
+
+    @patch('moveFiles.os.path.exists', return_value=False)
     def test_move_files_source_not_found(self, mock_exists):
-        # Mock source directory doesn't exist
-        mock_exists.return_value = False
-        
         with patch('builtins.print') as mock_print:
             move_files()
-        
-        # Verify error message was printed
-        mock_print.assert_called_with("Source directory not found: /Volumes/cacheDisk/signCollect/studioFiles")
-    
-    @patch('moveFiles.os.path.exists')
-    @patch('moveFiles.os.walk')
-    @patch('moveFiles.os.makedirs')
-    @patch('moveFiles.shutil.move')
-    def test_move_files_with_errors(self, mock_move, mock_makedirs, mock_walk, mock_exists):
-        # Mock the source directory exists
-        mock_exists.return_value = True
-        
-        # Mock os.walk to return test files
-        mock_walk.return_value = [
-            ("/Volumes/cacheDisk/signCollect/studioFiles/2025-05-27/raw", [], ["R20250527_1851.MP4"])
-        ]
-        
-        # Mock move operation to raise an exception
-        mock_move.side_effect = Exception("Permission denied")
-        
+
+        mock_print.assert_called_with("Source directory not found: /Volumes/cacheDisk/fx30_staging")
+
+    @patch('moveFiles.rsync_copy', side_effect=Exception("Permission denied"))
+    def test_move_files_with_errors(self, mock_copy):
+        self._patch_fs([(self.SOURCE + "/2025-05-27/raw", [], ["R20250527_1851.MP4"])])
+
         with patch('builtins.print') as mock_print:
             move_files()
-        
-        # Verify error message was printed
-        print_calls = [call[0][0] if call[0] else '' for call in mock_print.call_calls]
-        error_messages = [msg for msg in print_calls if "Error moving" in str(msg)]
-        self.assertEqual(len(error_messages), 1)
-        
-        # Verify summary shows 1 error
-        summary_messages = [msg for msg in print_calls if "Summary:" in str(msg)]
-        self.assertEqual(len(summary_messages), 1)
-        self.assertIn("1 errors", summary_messages[0])
+
+        print_calls = [c[0][0] if c[0] else '' for c in mock_print.call_args_list]
+        self.assertEqual(len([m for m in print_calls if "Unexpected error copying" in str(m)]), 1)
+        summary = [m for m in print_calls if "Summary:" in str(m)]
+        self.assertEqual(len(summary), 1)
+        self.assertIn("1 errors", summary[0])
 
 class TestMoveFilesIntegration(unittest.TestCase):
     
