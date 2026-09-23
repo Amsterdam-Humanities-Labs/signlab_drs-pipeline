@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Cleanup script: deletes already-uploaded files from post and post_noncropped,
-then re-crops preserved post_noncropped files (>= 2025-12-10) using crop_znn.py.
+then re-crops preserved post_noncropped files (>= 2025-12-10) using crop_sentences.py.
 
 Phase 1: Delete all matching files from all directories
 Phase 2: Verify all directories are clean
@@ -18,8 +18,8 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 import uuid
 
 sys.path.insert(0, '/Users/signlab/drs/shared')
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # for crop_znn in tools/
-from crop_znn import process_video_file, cleanup_temp_dirs
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # for crop_sentences in tools/
+from crop_sentences import process_video_file, cleanup_temp_dirs
 
 BASE_DIR = '/Users/signlab/signCollect/AIHR-FGW-TEST-SIGNLAB (Projectfolder)/studioFiles'
 API_URL = 'https://api.signcollect.nl/list/zin/videos'

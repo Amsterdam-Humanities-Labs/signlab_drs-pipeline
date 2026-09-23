@@ -627,10 +627,10 @@ def main():
         print("No tasks to process.")
 
 if __name__ == "__main__":
-    # Single file test mode: python crop_znn.py test <input_file> <output_dir>
+    # Single file test mode: python crop_sentences.py test <input_file> <output_dir>
     if len(sys.argv) >= 2 and sys.argv[1] == "test":
         if len(sys.argv) < 3:
-            print("Usage: python crop_znn.py test <input_file> [output_dir]")
+            print("Usage: python crop_sentences.py test <input_file> [output_dir]")
             sys.exit(1)
 
         input_file = sys.argv[2]
