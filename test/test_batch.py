@@ -5,18 +5,16 @@ from unittest.mock import patch, MagicMock, mock_open, call
 import os
 import sys
 
-# Add services/ so we can import batch, and shared/ for its transitive deps
-sys.path.insert(0, '/Users/signlab/drs/services')
-sys.path.insert(0, '/Users/signlab/drs/shared')
+# services/ and shared/ are put on sys.path by conftest.py
 
-# Mock the problematic imports before importing batch
+# Mock the problematic imports before importing batch_queue
 with patch.dict('sys.modules', {
     'video_api_client': MagicMock(),
     'python_get_resolve': MagicMock(),
     'requests': MagicMock()
 }):
-    # Import the functions from batch
-    from batch import get_video_orientation, get_resolve_with_retry
+    # Import the functions from batch_queue (successor of batch.py)
+    from batch_queue import get_video_orientation, get_resolve_with_retry
 
 class TestBatchFunctions(unittest.TestCase):
     
@@ -25,9 +23,9 @@ class TestBatchFunctions(unittest.TestCase):
         result = get_video_orientation("/nonexistent/file.mp4")
         self.assertEqual(result, (None, "file_not_found"))
     
-    @patch('batch.os.path.isfile')
-    @patch('batch.subprocess.run')
-    @patch('batch.json.loads')
+    @patch('batch_queue.os.path.isfile')
+    @patch('batch_queue.subprocess.run')
+    @patch('batch_queue.json.loads')
     def test_get_video_orientation_portrait(self, mock_json_loads, mock_subprocess, mock_isfile):
         # Mock file exists
         mock_isfile.return_value = True
@@ -58,9 +56,9 @@ class TestBatchFunctions(unittest.TestCase):
             encoding='utf-8'
         )
     
-    @patch('batch.os.path.isfile')
-    @patch('batch.subprocess.run')
-    @patch('batch.json.loads')
+    @patch('batch_queue.os.path.isfile')
+    @patch('batch_queue.subprocess.run')
+    @patch('batch_queue.json.loads')
     def test_get_video_orientation_landscape(self, mock_json_loads, mock_subprocess, mock_isfile):
         # Mock file exists
         mock_isfile.return_value = True
@@ -84,9 +82,9 @@ class TestBatchFunctions(unittest.TestCase):
         self.assertEqual(rotation, 0)
         self.assertEqual(orientation, "landscape")
     
-    @patch('batch.os.path.isfile')
-    @patch('batch.subprocess.run')
-    @patch('batch.json.loads')
+    @patch('batch_queue.os.path.isfile')
+    @patch('batch_queue.subprocess.run')
+    @patch('batch_queue.json.loads')
     def test_get_video_orientation_with_rotation(self, mock_json_loads, mock_subprocess, mock_isfile):
         # Mock file exists
         mock_isfile.return_value = True
@@ -111,9 +109,9 @@ class TestBatchFunctions(unittest.TestCase):
         self.assertEqual(rotation, 90)
         self.assertEqual(orientation, "portrait")  # 1080x1920 after rotation
     
-    @patch('batch.os.path.isfile')
-    @patch('batch.subprocess.run')
-    @patch('batch.json.loads')
+    @patch('batch_queue.os.path.isfile')
+    @patch('batch_queue.subprocess.run')
+    @patch('batch_queue.json.loads')
     def test_get_video_orientation_error_handling(self, mock_json_loads, mock_subprocess, mock_isfile):
         # Mock file exists
         mock_isfile.return_value = True
@@ -134,9 +132,9 @@ class TestBatchFunctions(unittest.TestCase):
         self.assertEqual(orientation, "portrait")
         mock_print.assert_called_once()
     
-    @patch('batch.GetResolve')
-    @patch('batch.os.system')
-    @patch('batch.time.sleep')
+    @patch('batch_queue.GetResolve')
+    @patch('batch_queue.os.system')
+    @patch('batch_queue.time.sleep')
     def test_get_resolve_with_retry_success_first_try(self, mock_sleep, mock_os_system, mock_get_resolve):
         # Mock successful resolve connection on first try
         mock_resolve = MagicMock()
@@ -148,9 +146,9 @@ class TestBatchFunctions(unittest.TestCase):
         mock_os_system.assert_not_called()
         mock_sleep.assert_not_called()
     
-    @patch('batch.GetResolve')
-    @patch('batch.os.system')
-    @patch('batch.time.sleep')
+    @patch('batch_queue.GetResolve')
+    @patch('batch_queue.os.system')
+    @patch('batch_queue.time.sleep')
     def test_get_resolve_with_retry_success_after_retries(self, mock_sleep, mock_os_system, mock_get_resolve):
         # Mock failed connection first two times, success on third
         mock_resolve = MagicMock()
@@ -165,9 +163,9 @@ class TestBatchFunctions(unittest.TestCase):
         mock_os_system.assert_called_with("open -a 'DaVinci Resolve'")
         mock_sleep.assert_called_with(10)
     
-    @patch('batch.GetResolve')
-    @patch('batch.os.system')
-    @patch('batch.time.sleep')
+    @patch('batch_queue.GetResolve')
+    @patch('batch_queue.os.system')
+    @patch('batch_queue.time.sleep')
     def test_get_resolve_with_retry_max_retries_exceeded(self, mock_sleep, mock_os_system, mock_get_resolve):
         # Mock failed connection for all attempts
         mock_get_resolve.return_value = None
@@ -182,13 +180,13 @@ class TestBatchFunctions(unittest.TestCase):
 class TestBatchIntegration(unittest.TestCase):
     """Integration tests for batch.py main functionality"""
     
-    @patch('batch.get_resolve_with_retry')
+    @patch('batch_queue.get_resolve_with_retry')
     def test_main_resolve_connection_failure(self, mock_get_resolve):
         # Mock failed resolve connection
         mock_get_resolve.return_value = None
         
         with patch('builtins.print') as mock_print:
-            from batch import main
+            from batch_queue import main
             main()
         
         # Should print failure message and return early

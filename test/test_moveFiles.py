@@ -6,11 +6,11 @@ from unittest.mock import patch, MagicMock
 from pathlib import Path
 import sys
 
-# Add the parent directory to the path to import moveFiles_backup
+# Add the parent directory to the path to import moveFiles
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-# Import the functions from moveFiles_backup
-from moveFiles_backup import convert_date_format, extract_date_from_filename, move_files
+# Import the functions from moveFiles
+from moveFiles import convert_date_format, extract_date_from_filename, move_files
 
 class TestMoveFiles(unittest.TestCase):
     
@@ -72,10 +72,10 @@ class TestMoveFiles(unittest.TestCase):
         # Clean up temporary directories
         shutil.rmtree(self.temp_dir)
     
-    @patch('moveFiles_backup.os.path.exists')
-    @patch('moveFiles_backup.os.walk')
-    @patch('moveFiles_backup.os.makedirs')
-    @patch('moveFiles_backup.shutil.move')
+    @patch('moveFiles.os.path.exists')
+    @patch('moveFiles.os.walk')
+    @patch('moveFiles.os.makedirs')
+    @patch('moveFiles.shutil.move')
     def test_move_files_success(self, mock_move, mock_makedirs, mock_walk, mock_exists):
         # Mock the source directory exists
         mock_exists.return_value = True
@@ -104,7 +104,7 @@ class TestMoveFiles(unittest.TestCase):
         success_messages = [msg for msg in print_calls if "Moved:" in str(msg)]
         self.assertEqual(len(success_messages), 3)
     
-    @patch('moveFiles_backup.os.path.exists')
+    @patch('moveFiles.os.path.exists')
     def test_move_files_source_not_found(self, mock_exists):
         # Mock source directory doesn't exist
         mock_exists.return_value = False
@@ -115,10 +115,10 @@ class TestMoveFiles(unittest.TestCase):
         # Verify error message was printed
         mock_print.assert_called_with("Source directory not found: /Volumes/cacheDisk/signCollect/studioFiles")
     
-    @patch('moveFiles_backup.os.path.exists')
-    @patch('moveFiles_backup.os.walk')
-    @patch('moveFiles_backup.os.makedirs')
-    @patch('moveFiles_backup.shutil.move')
+    @patch('moveFiles.os.path.exists')
+    @patch('moveFiles.os.walk')
+    @patch('moveFiles.os.makedirs')
+    @patch('moveFiles.shutil.move')
     def test_move_files_with_errors(self, mock_move, mock_makedirs, mock_walk, mock_exists):
         # Mock the source directory exists
         mock_exists.return_value = True
