@@ -9,5 +9,5 @@ Agent hints. Overview, services and config: README.md. Operator manual: docs/man
 - `qr/` (the running QR scanner) is gitignored; `qr_scanner/` is a read-only copy.
 - DaVinci Resolve is driven through `shared/python_get_resolve.py`; it only works on a machine with Resolve running.
 - Render claims between machines: `shared/drs_render_client.py` -> `signcollect.nl/drs_ep/api.php` (see docs/drs_ep_api_guide.md).
-- Tests in `test/` are stale: several import files that no longer exist (e.g. `moveFiles_backup`). `manual_*.py` need hardware.
+- `python3 -m pytest test/` runs anywhere: `test/conftest.py` stubs the Mac-only clients. `manual_*.py` need hardware.
 - Production server `signcollect.nl` is read-only for agents.
