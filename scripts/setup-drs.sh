@@ -215,7 +215,7 @@ check_apps() {
         warn "Resolve scripting module missing: $modules"
     fi
     manual "In DaVinci Resolve: Preferences > System > General > External scripting using: Local. Restart Resolve"
-    manual "In DaVinci Resolve: create a project named lala6 (services/batch_queue.py loads it by that name) with a 2160x3840 (portrait) timeline"
+    manual "In DaVinci Resolve: create a project named lala6 (services/batch_queue.py loads it by that name). Copy its settings from the current DRS; config/Settings.setting renders 2160x3840"
 
     if [ -d "/Applications/Tailscale.app" ]; then
         ok "Tailscale"
