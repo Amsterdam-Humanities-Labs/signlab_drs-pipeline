@@ -17,7 +17,7 @@ import math
 import glob
 sys.path.insert(0, '/Users/signlab/drs/shared')
 from signcollect_monitor import SignCollectMonitor  # Import the monitor client
-from server_config import server_url
+from server_config import server_url, videofix_headers
 
 # Ensure output is flushed immediately to logs
 sys.stdout.reconfigure(line_buffering=True)
@@ -865,7 +865,7 @@ def fetch_unresolved_fixes():
 
     try:
         print(f"Fetching unresolved fixes from {api_url}")
-        response = requests.get(api_url, verify=False, timeout=30)
+        response = requests.get(api_url, headers=videofix_headers(), verify=False, timeout=30)
         response.raise_for_status()
         data = response.json()
 
@@ -916,7 +916,7 @@ def mark_fix_resolved(m_file, file_name, max_retries=3):
             response = requests.post(
                 update_url,
                 json=payload,
-                headers={"Content-Type": "application/json"},
+                headers={"Content-Type": "application/json", **videofix_headers()},
                 verify=False,
                 timeout=30
             )
