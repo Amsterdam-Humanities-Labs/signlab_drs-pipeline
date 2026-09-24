@@ -64,3 +64,10 @@ cd /Users/signlab/drs
 - `services/crop_fix.py` reads the re-crop queue from `videoFix/crop_fixes.json` and reports to `videoFix/api.php?action=update_status` ([signlab_crop-fix-manager](https://github.com/Amsterdam-Humanities-Labs/signlab_crop-fix-manager)). `tools/reprocess_all_fixes.py` reads the same queue. Both send `X-Api-Token` from `VIDEOFIX_TOKEN` (see Configuration).
 - FX30 camera controller: [signlab_Sony-SDK-MACOS-API](https://github.com/Amsterdam-Humanities-Labs/signlab_Sony-SDK-MACOS-API).
 - Stack overview: [signlab_signcollect-stack](https://github.com/Amsterdam-Humanities-Labs/signlab_signcollect-stack).
+
+## License and citation
+
+Apache License 2.0, copyright University of Amsterdam: see [LICENSE](LICENSE) and
+[NOTICE](NOTICE). You may use it, also commercially, as long as you credit
+Gomer Otterspeer / University of Amsterdam as the source. To cite it, use
+[CITATION.cff](CITATION.cff) (the *Cite this repository* button on GitHub) or the DOI [10.21942/uva.33980332](https://doi.org/10.21942/uva.33980332).
