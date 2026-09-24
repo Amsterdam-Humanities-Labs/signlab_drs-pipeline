@@ -20,6 +20,9 @@ Helpers:
 ## Status
 Production.
 
+## Set up a new DRS
+`scripts/setup-drs.sh` checks the Mac and prints what it would do. Run it again with `--apply` to install Homebrew packages, the Python packages (`requirements-services.txt`, `requirements-qr.txt`), `qr/`, `.env`, the Sony camera server, the rclone remote (`--rclone`), the sudoers rule and a LaunchAgent that starts `startupScript.py` at login. It lists the manual steps (DaVinci Resolve Studio, cameras, macOS permissions) at the end. `--help` shows the options.
+
 ## How to run
 `startupScript.py` is the entry point. It starts and supervises the services below. Each service logs to `logs/<service>.log`, rotated at 10 MB.
 
@@ -46,6 +49,7 @@ cd /Users/signlab/drs
 - `tools/`: one-off repair and backfill scripts (the manual says when to use them). `variants/`: other batch and crop versions, run by hand. `test/`: tests, `python3 -m pytest test/` (runs off the DRS too); `test/manual_*.py` are scripts you run by hand.
 
 ## Configuration
+- Server: the services upload to `SIGNCOLLECT_URL` (environment or `.env`), default `https://signcollect.nl`. See `shared/server_config.py`.
 - DB credentials for `services/qrConvert.py` and `tools/check_studiofiles.py`: `DB_*` environment variables or an untracked `.env` in the repo root. See `.env.example`.
 - The rclone remote `signcollect:` lives in the rclone config of the `signlab` user (not in git).
 - `/etc/sudoers.d/signlab-network` gives `network_manager.py` passwordless sudo.

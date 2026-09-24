@@ -17,6 +17,7 @@ import math
 import glob
 sys.path.insert(0, '/Users/signlab/drs/shared')
 from signcollect_monitor import SignCollectMonitor  # Import the monitor client
+from server_config import server_url
 
 # Ensure output is flushed immediately to logs
 sys.stdout.reconfigure(line_buffering=True)
@@ -647,7 +648,7 @@ def reencode_with_ffmpeg(input_file, output_file=None):
 
 def upload_video(video_path):
     """Upload the video to the processing server"""
-    upload_url = "https://signcollect.nl/videoProc/upload_post.php"
+    upload_url = server_url("videoProc/upload_post.php")
 
     if not os.path.exists(video_path):
         print(f"Error: Video file not found at {video_path}")
@@ -860,7 +861,7 @@ def fetch_unresolved_fixes():
     - oob: dict with top/left/right/bottom booleans
     - files: list of unresolved file entries [{file, type}, ...]
     """
-    api_url = "https://signcollect.nl/videoFix/crop_fixes.json"
+    api_url = server_url("videoFix/crop_fixes.json")
 
     try:
         print(f"Fetching unresolved fixes from {api_url}")
@@ -902,7 +903,7 @@ def mark_fix_resolved(m_file, file_name, max_retries=3):
         file_name: Specific filename to mark as resolved (m_file, l_file, or r_file value)
         max_retries: Number of retry attempts for transient failures
     """
-    update_url = "https://signcollect.nl/videoFix/api.php?action=update_status"
+    update_url = server_url("videoFix/api.php?action=update_status")
 
     payload = {
         "m_file": m_file,

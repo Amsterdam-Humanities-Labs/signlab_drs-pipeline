@@ -2,7 +2,7 @@
 DRS Render Coordination Client
 
 Coordinates rendering between multiple DaVinci Resolve instances.
-Uses https://signcollect.nl/drs_ep/api.php to claim/release files
+Uses <SIGNCOLLECT_URL>/drs_ep/api.php to claim/release files
 so two machines don't render the same file.
 """
 import requests
@@ -10,8 +10,9 @@ import socket
 import json
 from datetime import datetime
 from typing import Optional, List, Dict, Any
+from server_config import server_url
 
-API_URL = "https://signcollect.nl/drs_ep/api.php"
+API_URL = server_url("drs_ep/api.php")
 
 
 class DRSRenderClient:

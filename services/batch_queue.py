@@ -6,6 +6,7 @@ from python_get_resolve import GetResolve
 from pathlib import Path
 from video_api_client import VideoAPIClient  # Import the API client
 from signcollect_monitor import SignCollectMonitor  # Import the monitor client
+from server_config import server_url
 
 # Raise open file descriptor limit to avoid "Too many open files" errors
 try:
@@ -449,7 +450,7 @@ def process_batch(files_batch, post_noncropped_dir, batch_num, total_batches):
 
     # Move rendered files to post_noncropped (determine correct directory from filename)
     print("Moving rendered files to post_noncropped...")
-    api_client = VideoAPIClient('https://signcollect.nl/renderServer')
+    api_client = VideoAPIClient(server_url('renderServer'))
 
     for rendered_file in export_dir.glob("*.mp4"):
         original_filename = rendered_file.name

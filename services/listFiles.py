@@ -10,8 +10,9 @@ from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 sys.path.insert(0, '/Users/signlab/drs/shared')
 from signcollect_monitor import SignCollectMonitor  # Import the monitor client
+from server_config import server_url
 
-CR_URL = "https://signcollect.nl/CR.php"
+CR_URL = server_url("CR.php")
 GLOSIDS_CACHE_DIR = "/Users/signlab/drs/logs/glosids_cache"
 SIDECAR_READ_WORKERS = 16
 
@@ -249,7 +250,7 @@ def list_and_count_files():
     return result
 
 def post_results(data):
-    url = "https://signcollect.nl/listFiles.php"
+    url = server_url("listFiles.php")
     try:
         response = requests.post(url, json=data, timeout=30)
         print(f"Posted to {url} - Status: {response.status_code}")

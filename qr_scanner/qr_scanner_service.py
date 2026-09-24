@@ -24,6 +24,7 @@ from collections import defaultdict
 # Add shared directory to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'shared'))
 from signcollect_monitor import SignCollectMonitor  # Import the monitor client
+from server_config import server_url
 
 # Initialize the monitor
 qr_monitor = SignCollectMonitor(
@@ -36,7 +37,7 @@ qr_monitor = SignCollectMonitor(
 # Configuration
 STUDIO_FILES_BASE = "/Users/signlab/signCollect/AIHR-FGW-TEST-SIGNLAB (Projectfolder)/studioFiles"
 SCANNED_STATE_FILE = "/Users/signlab/drs/qr/scanned_files.json"
-API_URL = "https://signcollect.nl/qr/qrResultReceiver.php"
+API_URL = server_url("qr/qrResultReceiver.php")
 SCAN_INTERVAL = 900  # 1 hour in seconds
 MAX_WORKERS = 4
 

@@ -1,0 +1,8 @@
+# Packages for the venv in the repo root (bin/python3, Homebrew python@3.13),
+# which startupScript.py uses for the QR scanner (qr/qr_scanner_service.py).
+# pyzbar also needs `brew install zbar`.
+requests
+numpy
+opencv-python
+qreader
+pyzbar

@@ -10,8 +10,9 @@ import socket
 import json
 from datetime import datetime
 from typing import Optional, Dict, Any
+from server_config import server_url
 
-DEFAULT_API_URL = "https://signcollect.nl/client_monitor_api/api.php"
+DEFAULT_API_URL = server_url("client_monitor_api/api.php")
 
 
 class SignCollectMonitor:
@@ -38,7 +39,7 @@ class SignCollectMonitor:
             client_name: Human-readable name for this client (e.g., 'DRS Batch Processor')
             description: Optional description of what this client does
             heartbeat_interval: Expected interval between heartbeats in seconds (default: 3600)
-            api_url: API endpoint URL (default: signcollect.nl)
+            api_url: API endpoint URL (default: SIGNCOLLECT_URL, see server_config.py)
         """
         self.client_id = client_id
         self.client_name = client_name
