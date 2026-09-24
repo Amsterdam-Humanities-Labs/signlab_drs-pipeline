@@ -9,6 +9,7 @@ import json
 import time
 sys.path.insert(0, '/Users/signlab/drs/shared')
 from signcollect_monitor import SignCollectMonitor  # Import the monitor client
+from server_config import server_url
 
 # Initialize the monitor
 monitor = SignCollectMonitor(
@@ -20,7 +21,7 @@ monitor = SignCollectMonitor(
 
 # Configuration
 DEST_BASE_DIR = '/Users/signlab/signCollect/AIHR-FGW-TEST-SIGNLAB (Projectfolder)/studioFiles'
-UPLOAD_URL = 'https://signcollect.nl/videoProc/upload2.php'
+UPLOAD_URL = server_url('videoProc/upload2.php')
 
 def upload_file_to_server(file_path):
     """Upload a single file to signcollect.nl"""

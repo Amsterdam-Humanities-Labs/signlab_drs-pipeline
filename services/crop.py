@@ -16,6 +16,7 @@ import sys
 import math
 sys.path.insert(0, '/Users/signlab/drs/shared')
 from signcollect_monitor import SignCollectMonitor  # Import the monitor client
+from server_config import server_url
 
 # Ensure output is flushed immediately to logs
 sys.stdout.reconfigure(line_buffering=True)
@@ -327,7 +328,7 @@ def reencode_with_ffmpeg(input_file, output_file=None):
 
 def upload_video(video_path):
     """Upload the video to the processing server"""
-    upload_url = "https://signcollect.nl/videoProc/upload_post.php"
+    upload_url = server_url("videoProc/upload_post.php")
 
     if not os.path.exists(video_path):
         print(f"Error: Video file not found at {video_path}")
@@ -386,7 +387,7 @@ def generate_thumbnail(video_path, thumbnail_path):
 
 def upload_thumbnail(thumbnail_path):
     """Upload a JPG thumbnail to the processing server (same endpoint as upload_video)."""
-    upload_url = "https://signcollect.nl/videoProc/upload_post.php"
+    upload_url = server_url("videoProc/upload_post.php")
 
     if not os.path.exists(thumbnail_path):
         print(f"Error: Thumbnail file not found at {thumbnail_path}")

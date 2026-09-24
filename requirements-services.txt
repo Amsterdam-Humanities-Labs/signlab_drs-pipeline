@@ -1,0 +1,13 @@
+# Packages for /usr/bin/python3 (Apple's Python 3.9), which startupScript.py uses
+# for everything in services/. Installed with `pip install --user` by
+# scripts/setup-drs.sh. The bounds keep numpy 1.x and mediapipe's mp.solutions
+# API (services/crop.py). They are not copied from the DRS: compare with
+# `/usr/bin/python3 -m pip list` there before pinning tighter.
+requests
+numpy<2
+opencv-python<4.11
+mediapipe>=0.10,<0.10.15
+pyautogui
+pynput
+websocket-client
+psutil
