@@ -46,6 +46,7 @@ cd /Users/signlab/drs
 - `tools/`: one-off repair and backfill scripts (the manual says when to use them). `variants/`: other batch and crop versions, run by hand. `test/`: tests, `python3 -m pytest test/` (runs off the DRS too); `test/manual_*.py` are scripts you run by hand.
 
 ## Configuration
+- DB credentials for `services/qrConvert.py` and `tools/check_studiofiles.py`: `DB_*` environment variables or an untracked `.env` in the repo root. See `.env.example`.
 - The rclone remote `signcollect:` lives in the rclone config of the `signlab` user (not in git).
 - `/etc/sudoers.d/signlab-network` gives `network_manager.py` passwordless sudo.
 - `mouse_config.json` in the repo root is optional. See `config/mouse_config.json.example`.
