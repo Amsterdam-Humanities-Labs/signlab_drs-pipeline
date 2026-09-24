@@ -1,0 +1,12 @@
+signlab_drs-pipeline - part of SignCollect
+Copyright 2026 University of Amsterdam
+
+Developed by Gomer Otterspeer (main author), with Berit Janssen and Stijn van Hannen,
+at the SignLab of the University of Amsterdam.
+
+Licensed under the Apache License, Version 2.0 (see LICENSE). You may use, change and
+redistribute this software, commercially or not. When you do, credit
+"Gomer Otterspeer / University of Amsterdam" as the source and keep this NOTICE file
+with it (Apache License 2.0, section 4(d)).
+
+Third-party files in this repository (for example vendored libraries) keep their own licences.
