@@ -8,6 +8,7 @@
 #
 #   scripts/setup-drs.sh                          # check only (dry run)
 #   scripts/setup-drs.sh --apply --server https://signcollect.nl --rclone
+#   VIDEOFIX_TOKEN=... scripts/setup-drs.sh --apply   # also store the videoFix token
 #
 # What it cannot do (it prints these at the end): install DaVinci Resolve
 # Studio, enable Resolve scripting, create the Resolve project, set up the
@@ -22,6 +23,9 @@ CAMERAS=3
 DISPLAY_SCREEN=""
 SKIP_BUILD=0
 INSTALL_AGENT=1
+# Token for videoFix/api.php. Taken from the environment, not an option, so it
+# does not end up in the shell history or the process list.
+NEW_VIDEOFIX_TOKEN="${VIDEOFIX_TOKEN:-}"
 
 DRS_USER="signlab"
 DRS_HOME="/Users/$DRS_USER"
@@ -62,6 +66,11 @@ Usage: scripts/setup-drs.sh [options]
   --skip-build          Do not build fx30MultiRecord.
   --no-launch-agent     Do not install the login item that starts the pipeline.
   -h, --help            Show this help.
+
+Environment:
+  VIDEOFIX_TOKEN        Token for videoFix/api.php (services/crop_fix.py).
+                        Written to .env. Same value as VIDEOFIX_TOKEN in the
+                        server's <webroot>/.env. Default: keep what .env has.
 EOF
 }
 
@@ -321,6 +330,25 @@ check_env() {
         fi
     fi
     SERVER_URL="$want"
+
+    # The value is never printed.
+    local token=""
+    [ -f "$env" ] && token="$(grep '^VIDEOFIX_TOKEN=' "$env" | tail -1 | cut -d= -f2-)"
+    if [ -n "$NEW_VIDEOFIX_TOKEN" ] && [ "$NEW_VIDEOFIX_TOKEN" != "$token" ]; then
+        todo "VIDEOFIX_TOKEN (from the environment)"
+        if [ "$APPLY" -eq 1 ]; then
+            set_env_key "$env" VIDEOFIX_TOKEN "$NEW_VIDEOFIX_TOKEN"
+            printf '   run   set VIDEOFIX_TOKEN in %s\n' "$env"
+        else
+            printf '   would set VIDEOFIX_TOKEN in %s\n' "$env"
+        fi
+    elif [ -n "$token" ]; then
+        ok "VIDEOFIX_TOKEN is set"
+    else
+        warn "VIDEOFIX_TOKEN is not set: services/crop_fix.py gets 401 from videoFix/api.php"
+        manual "Set VIDEOFIX_TOKEN in $env to the value of VIDEOFIX_TOKEN in the server's <webroot>/.env, or run again with VIDEOFIX_TOKEN=... in the environment"
+    fi
+
     if [ -f "$env" ] && grep -q '^DB_PASSWORD=$' "$env"; then
         manual "Fill in DB_PASSWORD in $env if you use services/qrConvert.py or tools/check_studiofiles.py (never commit it)"
     fi

@@ -2,6 +2,9 @@
 
 Set SIGNCOLLECT_URL in the environment or in the untracked .env in the repo
 root (see .env.example). Without it, the services use https://signcollect.nl.
+
+VIDEOFIX_TOKEN (same places) is the token videoFix/api.php (the crop-fix queue)
+wants in the X-Api-Token header; see videofix_headers().
 """
 import os
 
@@ -23,8 +26,14 @@ def _load_env() -> None:
 
 _load_env()
 SERVER_URL = (os.environ.get("SIGNCOLLECT_URL") or DEFAULT_SERVER_URL).rstrip("/")
+VIDEOFIX_TOKEN = os.environ.get("VIDEOFIX_TOKEN", "")
 
 
 def server_url(path: str = "") -> str:
     """SERVER_URL joined with a path, e.g. server_url("videoProc/upload2.php")."""
     return f"{SERVER_URL}/{path.lstrip('/')}" if path else SERVER_URL
+
+
+def videofix_headers() -> dict:
+    """Headers for videoFix/api.php: X-Api-Token from VIDEOFIX_TOKEN, if set."""
+    return {"X-Api-Token": VIDEOFIX_TOKEN} if VIDEOFIX_TOKEN else {}

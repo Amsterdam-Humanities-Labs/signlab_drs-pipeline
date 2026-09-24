@@ -21,6 +21,7 @@ sys.stderr.reconfigure(line_buffering=True)
 sys.path.insert(0, '/Users/signlab/drs/services')
 sys.path.insert(0, '/Users/signlab/drs/shared')
 from crop_fix import process_video_file, cleanup_temp_dirs, cleanup_old_temp_files, cleanup_temp_by_size
+from server_config import server_url, videofix_headers
 
 BASE_DIR = Path("/Users/signlab/signCollect/AIHR-FGW-TEST-SIGNLAB (Projectfolder)/studioFiles")
 TEMP_BASE = "/Users/signlab/drs/temp/"
@@ -29,11 +30,11 @@ MAX_WORKERS = 5
 
 def fetch_all_files():
     """Fetch ALL video files from crop_fixes API (both resolved and unresolved)."""
-    api_url = "https://signcollect.nl/videoFix/crop_fixes.json"
+    api_url = server_url("videoFix/crop_fixes.json")
 
     try:
         print(f"Fetching all fixes from {api_url}")
-        response = requests.get(api_url, verify=False, timeout=30)
+        response = requests.get(api_url, headers=videofix_headers(), verify=False, timeout=30)
         response.raise_for_status()
         data = response.json()
 

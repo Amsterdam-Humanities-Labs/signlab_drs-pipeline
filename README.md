@@ -50,6 +50,7 @@ cd /Users/signlab/drs
 
 ## Configuration
 - Server: the services upload to `SIGNCOLLECT_URL` (environment or `.env`), default `https://signcollect.nl`. See `shared/server_config.py`.
+- videoFix token: `VIDEOFIX_TOKEN` (environment or `.env`), sent as `X-Api-Token` to `videoFix/api.php`. Use the same value as `VIDEOFIX_TOKEN` in the server's `<webroot>/.env`. Without it, the crop-fix calls get 401. `scripts/setup-drs.sh` writes it when run with `VIDEOFIX_TOKEN=...`.
 - DB credentials for `services/qrConvert.py` and `tools/check_studiofiles.py`: `DB_*` environment variables or an untracked `.env` in the repo root. See `.env.example`.
 - The rclone remote `signcollect:` lives in the rclone config of the `signlab` user (not in git).
 - `/etc/sudoers.d/signlab-network` gives `network_manager.py` passwordless sudo.
@@ -60,6 +61,6 @@ cd /Users/signlab/drs
 - DaVinci Resolve, through its scripting API (`shared/python_get_resolve.py`).
 - signcollect.nl endpoints: `videoProc/upload2.php` and `videoProc/upload_post.php`, `renderServer`, `drs_ep/api.php` (render claims, via `shared/drs_render_client.py`), `listFiles.php` and `CR.php`.
 - Heartbeats: `client_monitor_api/api.php` (via `shared/signcollect_monitor.py`), see [signlab_client_monitor_api](https://github.com/Amsterdam-Humanities-Labs/signlab_client_monitor_api).
-- `services/crop_fix.py` reads the re-crop queue from `videoFix/crop_fixes.json` and reports to `videoFix/api.php` ([signlab_crop-fix-manager](https://github.com/Amsterdam-Humanities-Labs/signlab_crop-fix-manager)).
+- `services/crop_fix.py` reads the re-crop queue from `videoFix/crop_fixes.json` and reports to `videoFix/api.php?action=update_status` ([signlab_crop-fix-manager](https://github.com/Amsterdam-Humanities-Labs/signlab_crop-fix-manager)). `tools/reprocess_all_fixes.py` reads the same queue. Both send `X-Api-Token` from `VIDEOFIX_TOKEN` (see Configuration).
 - FX30 camera controller: [signlab_Sony-SDK-MACOS-API](https://github.com/Amsterdam-Humanities-Labs/signlab_Sony-SDK-MACOS-API).
 - Stack overview: [signlab_signcollect-stack](https://github.com/Amsterdam-Humanities-Labs/signlab_signcollect-stack).
