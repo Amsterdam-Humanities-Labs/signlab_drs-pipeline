@@ -1,0 +1,29 @@
+# Fails a push or pull request that adds a secret (password, API key, token).
+# Only the new commits are scanned: old history was checked once by hand and
+# every secret in it rotated. A false positive goes in .gitleaks.toml.
+name: gitleaks
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install gitleaks
+        run: curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz | tar -xz gitleaks
+      - name: Scan new commits
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          if [ "$EVENT" = pull_request ]; then range="$PR_BASE..HEAD"
+          elif [ -n "$BEFORE" ] && git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then range="$BEFORE..HEAD"
+          else range="-1"; fi
+          echo "scanning $range"
+          ./gitleaks git . --log-opts="$range" --redact --no-banner -v
