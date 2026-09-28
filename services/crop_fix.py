@@ -18,6 +18,7 @@ import glob
 sys.path.insert(0, '/Users/signlab/drs/shared')
 from signcollect_monitor import SignCollectMonitor  # Import the monitor client
 from server_config import server_url, videofix_headers
+from mount_guard import wait_until_ready
 
 # Ensure output is flushed immediately to logs
 sys.stdout.reconfigure(line_buffering=True)
@@ -1083,6 +1084,7 @@ def main_fix_mode(loop=False, interval_minutes=60):
     while True:
         # Send heartbeat at start of each cycle
         crop_fix_monitor.send_heartbeat()
+        wait_until_ready("crop_fix")
 
         print("\n" + "="*70)
         print(f"FIX MODE - Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")

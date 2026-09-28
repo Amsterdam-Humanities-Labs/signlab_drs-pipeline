@@ -8,6 +8,7 @@ import subprocess
 from pathlib import Path
 sys.path.insert(0, '/Users/signlab/drs/shared')
 from signcollect_monitor import SignCollectMonitor  # Import the monitor client
+from mount_guard import PipelineDownError, safe_makedirs, wait_until_ready
 
 # Initialize the monitor
 monitor = SignCollectMonitor(
@@ -103,7 +104,7 @@ def rsync_copy(source, destination, retries=2):
     dest_path = Path(destination)
     dest_dir = dest_path.parent
     if not dest_dir.exists():
-        os.makedirs(dest_dir, exist_ok=True)
+        safe_makedirs(dest_dir)
     
     for attempt in range(retries):
         try:
@@ -190,7 +191,8 @@ def move_files():
         print(f"Source directory not found: {source_base}")
         return
 
-    # Check if target mount is available before proceeding
+    # Wait out DNS/rclone outages, then check the target mount before proceeding
+    wait_until_ready("moveFiles")
     mount_base = "/Users/signlab/signCollect"
     if not check_mount_health(mount_base):
         print(f"Target mount not available or unresponsive: {mount_base}")
@@ -254,7 +256,7 @@ def move_files():
                     print(f"Re-copying incomplete {filename} ({target_size} != {source_size} bytes)")
 
                 # Create target directory if it doesn't exist
-                os.makedirs(target_dir, exist_ok=True)
+                safe_makedirs(target_dir)
 
                 # Copy only - fx30_controller treats staging as authoritative and
                 # its per-day .synced.txt ledger assumes the source still exists.
@@ -305,6 +307,9 @@ if __name__ == "__main__":
         except KeyboardInterrupt:
             print("\nService stopped by user")
             break
+        except PipelineDownError as e:
+            print(f"Pipeline down: {e}")
+            wait_until_ready("moveFiles")
         except Exception as e:
             print(f"Unexpected error: {e}")
             print("Sleeping for 1 hour before retry...")

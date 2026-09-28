@@ -7,6 +7,7 @@ from pathlib import Path
 from video_api_client import VideoAPIClient  # Import the API client
 from signcollect_monitor import SignCollectMonitor  # Import the monitor client
 from server_config import server_url
+from mount_guard import PipelineDownError, pipeline_problem, safe_makedirs, wait_until_ready
 
 # Raise open file descriptor limit to avoid "Too many open files" errors
 try:
@@ -76,7 +77,7 @@ def rsync_copy(source, destination, retries=2):
     dest_path = Path(destination)
     dest_dir = dest_path.parent
     if not dest_dir.exists():
-        os.makedirs(dest_dir, exist_ok=True)
+        safe_makedirs(dest_dir)
 
     for attempt in range(retries):
         try:
@@ -405,6 +406,11 @@ def process_batch(files_batch, post_noncropped_dir, batch_num, total_batches):
             rsync_copy(raw_file, local_path)
             local_files.append(local_path)
         except OSError as e:
+            # A copy that failed because the mount or DNS went away must not
+            # become a permanent .skip - abort the batch and retry once restored.
+            problem = pipeline_problem()
+            if problem:
+                raise PipelineDownError(f"Copy of {raw_file.name} failed while pipeline down: {problem}")
             print(f"  Failed to copy {raw_file.name}: {e}")
             create_skip_file(raw_file.name, post_noncropped_dir, f"rsync copy failed: {e}")
 
@@ -464,12 +470,28 @@ def process_batch(files_batch, post_noncropped_dir, batch_num, total_batches):
         date_yyyymmdd = clean_filename[1:9]  # Extract YYYYMMDD
         date_formatted = f"{date_yyyymmdd[:4]}-{date_yyyymmdd[4:6]}-{date_yyyymmdd[6:8]}"  # YYYY-MM-DD
         target_post_dir = BASE_DIR / date_formatted / "post_noncropped"
-        target_post_dir.mkdir(parents=True, exist_ok=True)
-
         dest = target_post_dir / clean_filename  # Use cleaned filename for destination
-        print(f"  Moving {clean_filename} to {date_formatted}/post_noncropped/...")
+
+        # The render only exists in export_dir until it is copied, so wait out
+        # a DNS/mount outage here instead of dropping it or writing it locally.
+        copied = False
+        while True:
+            wait_until_ready("batch_queue")
+            try:
+                safe_makedirs(target_post_dir)
+                print(f"  Moving {clean_filename} to {date_formatted}/post_noncropped/...")
+                rsync_copy(rendered_file, dest)
+                copied = True
+                break
+            except OSError as e:
+                if not pipeline_problem():
+                    print(f"  Failed to move {clean_filename}: {e}")
+                    break
+                print(f"  Copy of {clean_filename} interrupted by outage ({e}) - waiting to retry")
+        if not copied:
+            continue
+
         try:
-            rsync_copy(rendered_file, dest)
             rendered_file.unlink()
             print(f"  Moved {clean_filename} to post_noncropped")
 
@@ -484,8 +506,14 @@ def process_batch(files_batch, post_noncropped_dir, batch_num, total_batches):
                 else:
                     file_type = 'm_file'
 
-                api_client.update_rendered(clean_filename, file_type)
-                print(f"  Updated API for {clean_filename} ({file_type})")
+                result = api_client.update_rendered(clean_filename, file_type)
+                if isinstance(result, dict) and "error" in result:
+                    wait_until_ready("batch_queue")
+                    result = api_client.update_rendered(clean_filename, file_type)
+                if isinstance(result, dict) and "error" in result:
+                    print(f"  Warning: Failed to update API for {clean_filename}: {result['error']}")
+                else:
+                    print(f"  Updated API for {clean_filename} ({file_type})")
             except Exception as api_err:
                 print(f"  Warning: Failed to update API for {clean_filename}: {api_err}")
 
@@ -513,6 +541,9 @@ def main():
     os.system("pkill -9 -f 'DaVinci Resolve'")
     time.sleep(3)
 
+    # Wait out DNS/rclone outages rather than skipping the whole cycle
+    wait_until_ready("batch_queue")
+
     # Verify mount health
     if not verify_mount_health():
         print("Mount is not healthy. Exiting.")
@@ -539,7 +570,7 @@ def main():
             all_files_to_process.extend(files_to_process)
 
             # Ensure post_noncropped directory exists
-            post_noncropped_dir.mkdir(parents=True, exist_ok=True)
+            safe_makedirs(post_noncropped_dir)
 
     if not all_files_to_process:
         print("No files to process (all already processed or skipped).")
@@ -637,6 +668,9 @@ if __name__ == "__main__":
             main()
             print("Sleeping for 1 hour until next check...")
             time.sleep(60 * 60)  # Sleep for 1 hour (3600 seconds)
+        except PipelineDownError as e:
+            print(f"Pipeline down: {e}")
+            wait_until_ready("batch_queue")
         except KeyboardInterrupt:
             print("\nService stopped by user")
             break

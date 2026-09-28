@@ -10,6 +10,7 @@ import time
 sys.path.insert(0, '/Users/signlab/drs/shared')
 from signcollect_monitor import SignCollectMonitor  # Import the monitor client
 from server_config import server_url
+from mount_guard import safe_makedirs, wait_until_ready
 
 # Initialize the monitor
 monitor = SignCollectMonitor(
@@ -127,8 +128,8 @@ def process_directory(date_dir):
         return
     
     # Create converted and thumbnail directories if they don't exist
-    os.makedirs(converted_dir, exist_ok=True)
-    os.makedirs(thumbnail_dir, exist_ok=True)
+    safe_makedirs(converted_dir)
+    safe_makedirs(thumbnail_dir)
     
     # Get all video files from raw directory
     video_extensions = ['.mp4', '.mov', '.MP4', '.MOV']
@@ -140,6 +141,9 @@ def process_directory(date_dir):
         source_path = os.path.join(raw_dir, filename)
         destination_path = os.path.join(converted_dir, filename)
         thumbnail_path = os.path.join(thumbnail_dir, f"{Path(filename).stem}.jpg")
+        # Left behind when an upload failed on a network error, so the upload
+        # is retried even though the converted file already exists.
+        upload_marker = os.path.splitext(destination_path)[0] + ".upload_failed"
         
         conversion_happened = False
         
@@ -158,7 +162,8 @@ def process_directory(date_dir):
                 continue
         
         # Only proceed with thumbnail and upload if conversion happened
-        if conversion_happened:
+        # (or an earlier upload failed on a network error)
+        if conversion_happened or os.path.exists(upload_marker):
             # Check if thumbnail exists
             if not os.path.exists(thumbnail_path):
                 print(f"Generating thumbnail: {filename}")
@@ -177,17 +182,25 @@ def process_directory(date_dir):
                     continue
             
             # Upload files since conversion just happened
+            wait_until_ready("convertFiles")
             try:
                 if os.path.exists(destination_path):
                     upload_file_to_server(destination_path)
                 
                 if os.path.exists(thumbnail_path):
                     upload_file_to_server(thumbnail_path)
+                if os.path.exists(upload_marker):
+                    os.remove(upload_marker)
+            except requests.exceptions.ConnectionError as e:
+                print(f"Upload failed for {filename} (network, will retry): {e}")
+                with open(upload_marker, 'w') as f:
+                    f.write(time.strftime("%Y-%m-%d %H:%M:%S") + "\n")
             except Exception as e:
                 print(f"Upload failed for {filename}: {e}")
 
 def scan_and_process():
     """Main function to scan directories and process files"""
+    wait_until_ready("convertFiles")
     print("Starting directory scan...")
     
     # Get all date directories
