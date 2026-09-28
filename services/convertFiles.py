@@ -163,7 +163,7 @@ def process_directory(date_dir):
         
         # Only proceed with thumbnail and upload if conversion happened
         # (or an earlier upload failed on a network error)
-        if conversion_happened or os.path.exists(upload_marker):
+        if conversion_happened or upload_pending(upload_marker):
             # Check if thumbnail exists
             if not os.path.exists(thumbnail_path):
                 print(f"Generating thumbnail: {filename}")
@@ -189,14 +189,42 @@ def process_directory(date_dir):
                 
                 if os.path.exists(thumbnail_path):
                     upload_file_to_server(thumbnail_path)
-                if os.path.exists(upload_marker):
-                    os.remove(upload_marker)
             except requests.exceptions.ConnectionError as e:
                 print(f"Upload failed for {filename} (network, will retry): {e}")
-                with open(upload_marker, 'w') as f:
-                    f.write(time.strftime("%Y-%m-%d %H:%M:%S") + "\n")
+                try:
+                    with open(upload_marker, 'w') as f:
+                        f.write(time.strftime("%Y-%m-%d %H:%M:%S") + "\n")
+                except OSError as e2:
+                    print(f"Could not write upload marker {upload_marker}: {e2}")
+                continue
             except Exception as e:
                 print(f"Upload failed for {filename}: {e}")
+            clear_upload_marker(upload_marker)
+
+UPLOADED_MARKER_TEXT = "uploaded\n"
+
+def upload_pending(marker):
+    """True when an .upload_failed marker exists and has not been marked uploaded."""
+    try:
+        with open(marker) as f:
+            return f.read() != UPLOADED_MARKER_TEXT
+    except OSError:
+        return False
+
+def clear_upload_marker(marker):
+    """Remove an upload marker; the rclone mount sometimes answers unlink with
+    EIO, so fall back to overwriting it in place as done."""
+    if not os.path.exists(marker):
+        return
+    try:
+        os.remove(marker)
+    except OSError as e:
+        print(f"Could not remove upload marker {marker} ({e}); marking it uploaded")
+        try:
+            with open(marker, 'w') as f:
+                f.write(UPLOADED_MARKER_TEXT)
+        except OSError as e2:
+            print(f"Could not update upload marker {marker}: {e2}")
 
 def scan_and_process():
     """Main function to scan directories and process files"""

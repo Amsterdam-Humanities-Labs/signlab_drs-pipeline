@@ -440,21 +440,54 @@ def finish_upload(reencoded_file):
         upload_thumbnail(thumbnail_path)
     else:
         print(f"Skipping thumbnail upload for {reencoded_file} (generation failed)")
-    if os.path.exists(marker):
-        os.remove(marker)
+    clear_upload_marker(marker)
     return True
+
+def clear_upload_marker(marker):
+    """Remove an upload marker once the upload succeeded.
+
+    The rclone mount sometimes answers unlink with EIO. Overwriting in place
+    does work there, so fall back to marking it done rather than failing.
+    """
+    if not os.path.exists(marker):
+        return
+    try:
+        os.remove(marker)
+    except OSError as e:
+        print(f"Could not remove upload marker {marker} ({e}); marking it uploaded")
+        try:
+            with open(marker, 'w') as f:
+                f.write(UPLOADED_MARKER_TEXT)
+        except OSError as e2:
+            print(f"Could not update upload marker {marker}: {e2}")
+
+UPLOADED_MARKER_TEXT = "uploaded\n"
+
+def marker_already_uploaded(marker):
+    try:
+        with open(marker) as f:
+            return f.read() == UPLOADED_MARKER_TEXT
+    except OSError:
+        return False
 
 def retry_failed_uploads(output_folder):
     """Re-upload cropped videos whose earlier upload failed (see upload_marker_path)."""
     for name in sorted(os.listdir(output_folder)):
         if not name.endswith(".upload_failed"):
             continue
+        marker = os.path.join(output_folder, name)
+        if marker_already_uploaded(marker):
+            continue
         reencoded_file = os.path.join(output_folder, name[:-len(".upload_failed")] + ".MP4")
         if not os.path.exists(reencoded_file):
             print(f"Upload marker without video, leaving it: {name}")
             continue
         print(f"Retrying failed upload: {reencoded_file}")
-        finish_upload(reencoded_file)
+        # One bad file must not abort the whole crop cycle
+        try:
+            finish_upload(reencoded_file)
+        except Exception as e:
+            print(f"Retry of {reencoded_file} failed: {e}")
 
 def save_error_json(video_path, error_message, error_type="processing_error"):
     """Save error information to a JSON file with the same basename as the video"""
