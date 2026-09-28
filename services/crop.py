@@ -17,6 +17,7 @@ import math
 sys.path.insert(0, '/Users/signlab/drs/shared')
 from signcollect_monitor import SignCollectMonitor  # Import the monitor client
 from server_config import server_url
+from mount_guard import PipelineDownError, pipeline_problem, safe_makedirs, wait_until_ready
 
 # Ensure output is flushed immediately to logs
 sys.stdout.reconfigure(line_buffering=True)
@@ -408,6 +409,86 @@ def upload_thumbnail(thumbnail_path):
         print(f"Thumbnail upload error: {e}")
         return False
 
+def upload_marker_path(reencoded_file):
+    """Marker left next to a cropped _h264 file whose upload to signcollect.nl failed.
+
+    main() skips any file whose _h264 output exists, so without this marker a
+    failed upload (e.g. during a DNS outage) would never be retried.
+    """
+    return os.path.splitext(reencoded_file)[0] + ".upload_failed"
+
+def finish_upload(reencoded_file):
+    """Upload a cropped video and its thumbnail. Returns True when the video uploaded."""
+    wait_until_ready("crop")
+    marker = upload_marker_path(reencoded_file)
+    if not upload_video(reencoded_file):
+        print(f"Failed to upload {reencoded_file}")
+        try:
+            with open(marker, 'w') as f:
+                f.write(time.strftime("%Y-%m-%d %H:%M:%S") + "\n")
+        except OSError as e:
+            print(f"Could not write upload marker {marker}: {e}")
+        return False
+
+    # Thumbnail lives alongside the cropped video in post/, named after the
+    # original (non-_h264) basename so the server can key off source filename.
+    reencoded_dir = os.path.dirname(reencoded_file)
+    reencoded_stem = os.path.splitext(os.path.basename(reencoded_file))[0]
+    base_stem = reencoded_stem[:-len("_h264")] if reencoded_stem.endswith("_h264") else reencoded_stem
+    thumbnail_path = os.path.join(reencoded_dir, f"{base_stem}.jpg")
+    if generate_thumbnail(reencoded_file, thumbnail_path):
+        upload_thumbnail(thumbnail_path)
+    else:
+        print(f"Skipping thumbnail upload for {reencoded_file} (generation failed)")
+    clear_upload_marker(marker)
+    return True
+
+def clear_upload_marker(marker):
+    """Remove an upload marker once the upload succeeded.
+
+    The rclone mount sometimes answers unlink with EIO. Overwriting in place
+    does work there, so fall back to marking it done rather than failing.
+    """
+    if not os.path.exists(marker):
+        return
+    try:
+        os.remove(marker)
+    except OSError as e:
+        print(f"Could not remove upload marker {marker} ({e}); marking it uploaded")
+        try:
+            with open(marker, 'w') as f:
+                f.write(UPLOADED_MARKER_TEXT)
+        except OSError as e2:
+            print(f"Could not update upload marker {marker}: {e2}")
+
+UPLOADED_MARKER_TEXT = "uploaded\n"
+
+def marker_already_uploaded(marker):
+    try:
+        with open(marker) as f:
+            return f.read() == UPLOADED_MARKER_TEXT
+    except OSError:
+        return False
+
+def retry_failed_uploads(output_folder):
+    """Re-upload cropped videos whose earlier upload failed (see upload_marker_path)."""
+    for name in sorted(os.listdir(output_folder)):
+        if not name.endswith(".upload_failed"):
+            continue
+        marker = os.path.join(output_folder, name)
+        if marker_already_uploaded(marker):
+            continue
+        reencoded_file = os.path.join(output_folder, name[:-len(".upload_failed")] + ".MP4")
+        if not os.path.exists(reencoded_file):
+            print(f"Upload marker without video, leaving it: {name}")
+            continue
+        print(f"Retrying failed upload: {reencoded_file}")
+        # One bad file must not abort the whole crop cycle
+        try:
+            finish_upload(reencoded_file)
+        except Exception as e:
+            print(f"Retry of {reencoded_file} failed: {e}")
+
 def save_error_json(video_path, error_message, error_type="processing_error"):
     """Save error information to a JSON file with the same basename as the video"""
     json_path = os.path.splitext(video_path)[0] + "_error.json"
@@ -427,6 +508,13 @@ def save_error_json(video_path, error_message, error_type="processing_error"):
 
 def process_video_file(input_file, output_file, temp_dir=None):
     try:
+        # Don't crop onto a dead mount or record an error for an outage;
+        # the file is picked up again on the next cycle.
+        problem = pipeline_problem()
+        if problem:
+            print(f"Skipping {input_file} for now: {problem}")
+            return
+
         print(f"Processing file: {input_file}")
         
         # Create a unique temp directory for this task if not provided
@@ -470,21 +558,8 @@ def process_video_file(input_file, output_file, temp_dir=None):
         
         # If re-encoding succeeded, upload the video and then generate/upload a thumbnail
         if reencoded_file:
-            upload_success = upload_video(reencoded_file)
-            if upload_success:
-                # Thumbnail lives alongside the cropped video in post/, named after the
-                # original (non-_h264) basename so the server can key off source filename.
-                reencoded_dir = os.path.dirname(reencoded_file)
-                reencoded_stem = os.path.splitext(os.path.basename(reencoded_file))[0]
-                base_stem = reencoded_stem[:-len("_h264")] if reencoded_stem.endswith("_h264") else reencoded_stem
-                thumbnail_path = os.path.join(reencoded_dir, f"{base_stem}.jpg")
-                if generate_thumbnail(reencoded_file, thumbnail_path):
-                    upload_thumbnail(thumbnail_path)
-                else:
-                    print(f"Skipping thumbnail upload for {reencoded_file} (generation failed)")
+            if finish_upload(reencoded_file):
                 print(f"Video processing complete for {input_file}")
-            else:
-                print(f"Failed to upload {reencoded_file}")
         else:
             print(f"Skipping upload due to re-encoding failure: {output_file}")
             
@@ -599,6 +674,7 @@ def main():
     # base_dir = Path("/Users/gomerotterspeer/drs/landscape")    # Loop through each parent directory in base_dir (e.g., "2025-03-01")
     # homedir = Path("/Users/gomerotterspeer/")
 
+    wait_until_ready("crop")
     print(f"Processing date directories from the past 62 days")
 
     for subdir in sorted(os.listdir(base_dir), reverse=True):
@@ -624,7 +700,8 @@ def main():
             continue
         print(f"Processing folder: {date_dir}")
         if not os.path.exists(output_folder):
-            os.makedirs(output_folder)
+            safe_makedirs(output_folder)
+        retry_failed_uploads(output_folder)
         # Process each video file in the input folder.
         for filename in sorted(os.listdir(input_folder)):
             if not filename.lower().endswith(('.mp4', '.mov', '.avi')):

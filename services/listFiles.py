@@ -11,6 +11,7 @@ from concurrent.futures import ThreadPoolExecutor
 sys.path.insert(0, '/Users/signlab/drs/shared')
 from signcollect_monitor import SignCollectMonitor  # Import the monitor client
 from server_config import server_url
+from mount_guard import wait_until_ready
 
 CR_URL = server_url("CR.php")
 GLOSIDS_CACHE_DIR = "/Users/signlab/drs/logs/glosids_cache"
@@ -267,6 +268,8 @@ if __name__ == "__main__":
         # Send heartbeat at start of each cycle
         monitor.send_heartbeat()
 
+        # Don't post a file count taken from a dead mount
+        wait_until_ready("listFiles")
         print(f"Running file count at {datetime.now()}")
         data = list_and_count_files()
 
