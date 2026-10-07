@@ -361,10 +361,10 @@ def test_cameras_expected_from_option_or_controller_config(f):
 def test_cameras_none_connected_or_none_found(f):
     f.http["http://cam/api/status"] = (200, cameras_json(0, 5))
     res = health.check_cameras(f.env)
-    assert status_of(res) == "fail" and res["detail"] == "0 of 5 connected"
+    assert status_of(res) == "warn" and res["detail"] == "0 of 5 connected (switched off?)"
     f.http["http://cam/api/status"] = (200, cameras_json(0, 0))
     res = health.check_cameras(f.env)
-    assert status_of(res) == "fail" and res["detail"] == "no cameras found"
+    assert status_of(res) == "warn" and res["detail"] == "no cameras found (switched off?)"
     assert len(f.requests) == 3   # an empty list is asked for a second time
 
 
@@ -469,10 +469,16 @@ def test_uploads_age_of_waiting_files(f, day, expected):
 
 
 def test_uploads_errors_in_service_logs_warn(f):
-    f.write_log("convertFiles.log", "Converting: a\nUpload failed for M1.MP4: Expecting value\n")
+    f.write_log("convertFiles.log", "Converting: a\nUpload failed for M1.MP4: HTTP 500\n")
     f.write_log("crop.log", "Failed to upload /x/L1_h264.MP4\nUpload successful: ok\n")
     res = health.check_uploads(f.env)
     assert status_of(res) == "warn" and res["detail"] == "2 upload errors in the recent service logs"
+
+
+def test_uploads_plain_text_reply_is_not_an_error(f):
+    # upload2.php answers in text; older checkouts log that as "Expecting value".
+    f.write_log("convertFiles.log", "Upload failed for M1.MP4: Expecting value: line 1 column 1 (char 0)\n" * 50)
+    assert status_of(health.check_uploads(f.env)) == "ok"
 
 
 def test_uploads_unknown_when_drive_down_or_slow(f):

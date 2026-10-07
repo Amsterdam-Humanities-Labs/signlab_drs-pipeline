@@ -363,7 +363,8 @@ def check_cameras(env):
         return result("ok" if busy[0] != "scanning" else "warn", f"{detail} ({busy[0]})",
                       "" if busy[0] != "scanning" else "Wait for the scan to finish.")
     if connected == 0:
-        return result("fail", detail if expected else "no cameras found", reset)
+        # Outside a recording session the cameras are simply switched off.
+        return result("warn", (detail if expected else "no cameras found") + " (switched off?)", reset)
     return result("warn", detail, reset)
 
 
@@ -435,7 +436,9 @@ def check_network(env):
     return result("ok", detail)
 
 
-UPLOAD_ERROR = re.compile(r"^(?:Upload failed|Failed to upload|Thumbnail upload failed|Upload error)", re.M)
+# "Expecting value" is not an upload error: upload2.php answers in plain text and
+# older checkouts read that as JSON. The file did arrive (see shared/upload_reply.py).
+UPLOAD_ERROR = re.compile(r"^(?:Upload failed|Failed to upload|Thumbnail upload failed|Upload error)(?!.*Expecting value).*$", re.M)
 
 
 def check_uploads(env):

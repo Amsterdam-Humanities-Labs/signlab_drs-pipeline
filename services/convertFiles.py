@@ -10,6 +10,7 @@ import time
 sys.path.insert(0, '/Users/signlab/drs/shared')
 from signcollect_monitor import SignCollectMonitor  # Import the monitor client
 from server_config import server_url
+from upload_reply import parse_upload_reply
 from mount_guard import safe_makedirs, wait_until_ready
 
 # Initialize the monitor
@@ -46,7 +47,7 @@ def upload_file_to_server(file_path):
             headers = {'Accept': 'application/json'}
             
             response = requests.post(UPLOAD_URL, files=files, headers=headers, timeout=180)
-            result = response.json()
+            result = parse_upload_reply(field, response.status_code, response.text)
             print(f"← {field} upload succeeded. Server replied:", result)
             return result
     except Exception as err:

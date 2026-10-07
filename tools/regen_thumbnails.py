@@ -4,6 +4,9 @@ import re
 import subprocess
 from pathlib import Path
 import requests
+import sys
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'shared'))
+from upload_reply import parse_upload_reply
 
 DEST_BASE_DIR = '/Users/signlab/signCollect/AIHR-FGW-TEST-SIGNLAB (Projectfolder)/studioFiles'
 UPLOAD_URL = 'https://signcollect.nl/videoProc/upload2.php'
@@ -43,7 +46,7 @@ def upload_file(file_path):
         with open(file_path, 'rb') as f:
             files = {field: (os.path.basename(file_path), f, 'application/octet-stream')}
             response = requests.post(UPLOAD_URL, files=files, headers={'Accept': 'application/json'}, timeout=300)
-            print(f"  Uploaded {field}: {response.json()}")
+            print(f"  Uploaded {field}: {parse_upload_reply(field, response.status_code, response.text)}")
             return True
     except Exception as e:
         print(f"  Upload error ({field}): {e}")
