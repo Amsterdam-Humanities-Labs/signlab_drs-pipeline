@@ -46,6 +46,7 @@ cd /Users/signlab/drs
 - Scheduled daily restarts are off (`restart_times = []`).
 - `startupScript.py` does not start `services/startServer_beta.js` (commented out), `services/crop_fix.py`, `services/startMonitor.py` (a PyQt dashboard) or `services/qrConvert.py`.
 - `scripts/batch.sh` runs `variants/batch.py` in a loop. Start it by hand.
+- `tools/health.py`: read-only studio health check, one ok/warn/fail line per part (`--json` for the controller app's Status tab). See [docs/health.md](docs/health.md).
 - `tools/`: one-off repair and backfill scripts (the manual says when to use them). `variants/`: other batch and crop versions, run by hand. `test/`: tests, `python3 -m pytest test/` (runs off the DRS too); `test/manual_*.py` are scripts you run by hand.
 
 ## Configuration
