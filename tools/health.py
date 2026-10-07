@@ -82,6 +82,19 @@ def http_get(url, headers=None, timeout=4):
         return e.code, ""
 
 
+def mac_name():
+    """The Mac's own name. gethostname() gives the network's name for it on
+    Wi-Fi (re-byodm-145-109-...), which changes and tells nobody anything."""
+    try:
+        out = subprocess.run(["/usr/sbin/scutil", "--get", "LocalHostName"], capture_output=True,
+                             text=True, timeout=3).stdout.strip()
+        if out:
+            return out
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return socket.gethostname().split(".")[0]
+
+
 def tail(path, max_bytes=LOG_TAIL_BYTES):
     """The last max_bytes of a local log, as text. crop.log is 500 MB: never read it all."""
     with open(path, "rb") as fh:
@@ -259,11 +272,22 @@ def check_resolve(env):
                           "Check the Research drive and Network lines.")
         if status == "ok" and running_h > BATCH_RUNNING_HOURS:
             return result("warn", f"batch has been running since {started[:16]}", action)
-        if status == "ok" and len(runs) > 1:
-            # Nothing wrong so far: the last finished run says more.
-            prev_started, prev_body = runs[-2]
-            status, summary, _ = judge_batch_run(prev_body)
-            detail = f"batch running since {hhmm}; batch of {prev_started[11:16]} {summary}"
+        if status == "ok":
+            # Say what THIS run is doing: its own queue and what it has finished.
+            queued = len(re.findall(r"Added \S+ to render queue", body))
+            done = len(re.findall(r"Moved \S+ to post_noncropped", body))
+            if queued:
+                detail = f"rendering since {hhmm}: {done} of {queued} clips done"
+            elif "Rendering in progress" in body:
+                detail = f"rendering since {hhmm}"
+            else:
+                detail = f"batch started at {hhmm}, preparing"
+            if len(runs) > 1:
+                # The last finished run decides the colour while this one has no errors.
+                prev_started, prev_body = runs[-2]
+                status, summary, _ = judge_batch_run(prev_body)
+                if status != "ok":
+                    detail += f"; batch of {prev_started[11:16]} {summary}"
         else:
             detail = f"batch running since {hhmm}, {summary}"
     else:
@@ -645,7 +669,7 @@ def build_env(args=None, environ=None):
                         "/opt/homebrew/bin/tailscale", "/usr/local/bin/tailscale"],
         require_ethernet=bool(getattr(args, "require_ethernet", False)),
         upload_days=int(pick("upload_days", 30)),
-        host=socket.gethostname().split(".")[0],
+        host=mac_name(),
         now=lambda: datetime.now().astimezone(),
         run=run_command,
         http_get=http_get,

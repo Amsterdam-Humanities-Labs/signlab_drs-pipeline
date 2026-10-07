@@ -266,11 +266,24 @@ def test_resolve_running_uses_previous_run(f):
     running = batch_run("2026-10-07 13:50:00", "Rendering in progress... (13:55:00)", end=None)
     f.write_log("batch.log", batch_run("2026-10-07 12:00:00", "Failed to open DaVinci Resolve") + running)
     res = health.check_resolve(f.env)
-    assert status_of(res) == "fail" and res["detail"].startswith("batch running since 13:50; batch of 12:00 failed")
+    assert status_of(res) == "fail" and res["detail"].startswith("rendering since 13:50; batch of 12:00 failed")
     f.write_log("batch.log", batch_run("2026-10-07 12:00:00", "No files to process") + running)
-    assert status_of(health.check_resolve(f.env)) == "ok"
+    res = health.check_resolve(f.env)
+    assert status_of(res) == "ok" and res["detail"] == "rendering since 13:50"   # not "nothing to render"
     f.write_log("batch.log", running)
-    assert health.check_resolve(f.env)["detail"] == "batch running since 13:50, ok, nothing to render"
+    assert health.check_resolve(f.env)["detail"] == "rendering since 13:50"
+
+
+def test_resolve_running_reports_its_own_progress(f):
+    body = ("Added L1.MP4 to render queue (job ID: a)\nAdded M1.MP4 to render queue (job ID: b)\n"
+            "Added R1.MP4 to render queue (job ID: c)\nRendering in progress... (13:55:00)\n"
+            "  Moved L1.MP4 to post_noncropped\n")
+    f.write_log("batch.log", batch_run("2026-10-07 12:00:00", "No files to process")
+                + batch_run("2026-10-07 13:50:00", body, end=None))
+    res = health.check_resolve(f.env)
+    assert status_of(res) == "ok" and res["detail"] == "rendering since 13:50: 1 of 3 clips done"
+    f.write_log("batch.log", batch_run("2026-10-07 13:50:00", "Killing any existing DaVinci Resolve process...", end=None))
+    assert health.check_resolve(f.env)["detail"] == "batch started at 13:50, preparing"
 
 
 def test_resolve_warns_when_waiting_stuck_or_silent(f):
