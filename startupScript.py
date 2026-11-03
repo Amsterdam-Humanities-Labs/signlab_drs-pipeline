@@ -58,87 +58,116 @@ class ProcessMonitor:
         # it. It has its own health check, so it does not need periodic recycling.
         self.scheduled_restart_skip = {'rclone'}
         self.last_scheduled_restart = None  # Track last scheduled restart datetime
-        
+
         self.services = [
             {
                 'name': 'mouse',
                 'command': ['/usr/bin/python3', '/Users/signlab/drs/services/mouse.py'],
-                'cwd': '/Users/signlab/drs'
+                'cwd': '/Users/signlab/drs',
             },
             {
                 'name': 'keyboardMonitor',
-                'command': ['/usr/bin/python3', '/Users/signlab/drs/services/keyboard_monitor.py'],
-                'cwd': '/Users/signlab/drs'
+                'command': [
+                    '/usr/bin/python3',
+                    '/Users/signlab/drs/services/keyboard_monitor.py',
+                ],
+                'cwd': '/Users/signlab/drs',
             },
             {
                 'name': 'moveFiles',
-                'command': ['/usr/bin/python3', '/Users/signlab/drs/services/moveFiles.py'],
-                'cwd': '/Users/signlab/drs'
+                'command': [
+                    '/usr/bin/python3',
+                    '/Users/signlab/drs/services/moveFiles.py',
+                ],
+                'cwd': '/Users/signlab/drs',
             },
             {
                 'name': 'batch',
-                'command': ['/usr/bin/python3', '/Users/signlab/drs/services/batch_queue.py'],
-                'cwd': '/Users/signlab/drs'
+                'command': [
+                    '/usr/bin/python3',
+                    '/Users/signlab/drs/services/batch_queue.py',
+                ],
+                'cwd': '/Users/signlab/drs',
             },
             {
                 'name': 'crop',
                 'command': ['/usr/bin/python3', '/Users/signlab/drs/services/crop.py'],
-                'cwd': '/Users/signlab/drs'
+                'cwd': '/Users/signlab/drs',
             },
-            # Disabled 2026-07-01: replaced by the Sony FX30 camera server
-            # (fx30MultiRecord) which owns port 8080. Re-enable only if reverting.
-            # {
-            #     'name': 'server',
-            #     'command': ['/opt/homebrew/bin/node', '/Users/signlab/drs/services/startServer_beta.js'],
-            #     'cwd': '/Users/signlab/drs'
-            # },
-                {
+            {
                 'name': 'convertFiles',
-                'command': ['/usr/bin/python3', '/Users/signlab/drs/services/convertFiles.py'],
-                'cwd': '/Users/signlab/drs'
+                'command': [
+                    '/usr/bin/python3',
+                    '/Users/signlab/drs/services/convertFiles.py',
+                ],
+                'cwd': '/Users/signlab/drs',
             },
             {
                 'name': 'rclone',
                 'command': [
-                    '/Users/signlab/rclone/rclone', 'mount', 'signcollect:', '/Users/signlab/signCollect',
+                    '/Users/signlab/rclone/rclone',
+                    'mount',
+                    'signcollect:',
+                    '/Users/signlab/signCollect',
                     '--allow-other',
-                    '--vfs-cache-mode', 'full',
-                    '--vfs-cache-max-size', '4000G',
-                    '--vfs-write-back', '5s',
-                    '--vfs-cache-poll-interval', '1m',
-                    '--dir-cache-time', '2h',
-                    '--transfers', '4',
-                    '--checkers', '4',
-                    '--log-level', 'INFO',
-                    '--daemon-timeout', '60s',
-                    '--cache-dir', '/Volumes/cacheDisk/rclone',
-                    '--vfs-cache-mode', 'full',
+                    '--vfs-cache-mode',
+                    'full',
+                    '--vfs-cache-max-size',
+                    '4000G',
+                    '--vfs-write-back',
+                    '5s',
+                    '--vfs-cache-poll-interval',
+                    '1m',
+                    '--dir-cache-time',
+                    '2h',
+                    '--transfers',
+                    '4',
+                    '--checkers',
+                    '4',
+                    '--log-level',
+                    'INFO',
+                    '--daemon-timeout',
+                    '60s',
+                    '--cache-dir',
+                    '/Volumes/cacheDisk/rclone',
+                    '--vfs-cache-mode',
+                    'full',
                 ],
-                'cwd': '/Users/signlab'
+                'cwd': '/Users/signlab',
             },
             {
-                   'name': 'listFiles',
-                'command': ['/usr/bin/python3', '/Users/signlab/drs/services/listFiles.py'],
-                'cwd': '/Users/signlab/drs'
+                'name': 'listFiles',
+                'command': [
+                    '/usr/bin/python3',
+                    '/Users/signlab/drs/services/listFiles.py',
+                ],
+                'cwd': '/Users/signlab/drs',
             },
             {
                 'name': 'networkManager',
-                'command': ['/usr/bin/python3', '-u', '/Users/signlab/drs/services/network_manager.py'],
-                'cwd': '/Users/signlab/drs'
+                'command': [
+                    '/usr/bin/python3',
+                    '-u',
+                    '/Users/signlab/drs/services/network_manager.py',
+                ],
+                'cwd': '/Users/signlab/drs',
             },
             {
                 'name': 'watchdog',
                 'command': ['/bin/bash', '/Users/signlab/drs/scripts/watchdog.sh'],
-                'cwd': '/Users/signlab/drs'
+                'cwd': '/Users/signlab/drs',
             },
             {
                 'name': 'qrScanner',
-                'command': ['/Users/signlab/drs/bin/python3', '/Users/signlab/drs/qr/qr_scanner_service.py'],
-                'cwd': '/Users/signlab/drs/qr'
-            }
+                'command': [
+                    '/Users/signlab/drs/bin/python3',
+                    '/Users/signlab/drs/qr/qr_scanner_service.py',
+                ],
+                'cwd': '/Users/signlab/drs/qr',
+            },
         ]
         self.running = True
-        
+
         # Create log directory and set up log files after services are defined
         self.setup_log_directory()
 
@@ -147,13 +176,13 @@ class ProcessMonitor:
         try:
             os.makedirs(self.log_dir, exist_ok=True)
             logging.info(f"Log directory created/verified at: {self.log_dir}")
-            
+
             # Set up log file paths for each service
             for service in self.services:
                 service_name = service['name']
                 log_path = os.path.join(self.log_dir, f"{service_name}.log")
                 self.log_files[service_name] = log_path
-                
+
         except Exception as e:
             logging.error(f"Failed to create log directory {self.log_dir}: {e}")
 
@@ -275,7 +304,7 @@ class ProcessMonitor:
             if service['name'] == 'rclone':
                 rclone_service = service
                 break
-        
+
         if rclone_service:
             if not self.network_ready():
                 logging.warning("Mount unhealthy but DNS is down - waiting for network instead of restarting rclone")
@@ -285,13 +314,13 @@ class ProcessMonitor:
                 return
             logging.warning("Mount unhealthy - restarting rclone service")
             self.restart_service(rclone_service)
-            
+
             # Check if there's a recovery marker file and remove it after successful restart
             marker_file = '/Users/signlab/drs/mount_recovery_needed'
             if os.path.exists(marker_file):
                 # Wait a bit for mount to stabilize
                 time.sleep(10)
-                
+
                 # Verify mount is working before removing marker
                 if self.check_mount_health():
                     try:
@@ -310,7 +339,7 @@ class ProcessMonitor:
             if os.path.exists(log_path):
                 file_size = os.path.getsize(log_path)
                 max_size = 10 * 1024 * 1024  # 10MB
-                
+
                 if file_size > max_size:
                     # Rotate the log file
                     backup_path = f"{log_path}.1"
@@ -318,7 +347,7 @@ class ProcessMonitor:
                         os.remove(backup_path)
                     os.rename(log_path, backup_path)
                     logging.info(f"Rotated log file: {log_path} -> {backup_path}")
-                    
+
         except Exception as e:
             logging.error(f"Failed to rotate log file {log_path}: {e}")
 
@@ -329,18 +358,18 @@ class ProcessMonitor:
             if not log_path:
                 log_path = os.path.join(self.log_dir, f"{service_name}.log")
                 self.log_files[service_name] = log_path
-            
+
             # Check if rotation is needed before opening
             self.rotate_log_if_needed(log_path)
-            
+
             # Add timestamp header when starting new log session
             timestamp = time.strftime('%Y-%m-%d %H:%M:%S')
             with open(log_path, 'a') as header_file:
                 header_file.write(f"\n--- Service {service_name} started at {timestamp} ---\n")
-            
+
             # Open file handle for writing (subprocess will write to it)
             return open(log_path, 'a')
-            
+
         except Exception as e:
             logging.error(f"Failed to create log file handle for {service_name}: {e}")
             return None
@@ -361,13 +390,13 @@ class ProcessMonitor:
                 if not self.quarantine_stray_mountpoint():
                     logging.error("Refusing to start rclone: mount point is not empty and could not be cleared - rclone cannot mount over it")
                     return None
-            
+
             logging.info(f"Starting service: {service['name']}")
-            
+
             # Get log file handle for this service
             service_name = service['name']
             log_handle = self.get_log_file_handle(service_name)
-            
+
             if log_handle:
                 # Redirect stdout and stderr to the service's log file
                 process = subprocess.Popen(
@@ -379,7 +408,7 @@ class ProcessMonitor:
                     universal_newlines=True,
                     bufsize=1  # Line buffering
                 )
-                
+
                 # Store the log handle so we can close it later
                 process._log_handle = log_handle
             else:
@@ -390,7 +419,7 @@ class ProcessMonitor:
                     cwd=service['cwd'],
                     preexec_fn=os.setsid
                 )
-            
+
             self.processes[service['name']] = process
             logging.info(f"Service {service['name']} started with PID {process.pid}")
             if service['name'] == 'rclone':
@@ -407,7 +436,7 @@ class ProcessMonitor:
     def should_restart_service(self, service_name: str) -> bool:
         """Check if service should be restarted based on restart limits"""
         now = time.time()
-        
+
         # Check if service is in cooldown period
         if service_name in self.disabled_services:
             disabled_time = self.disabled_services[service_name]
@@ -420,35 +449,35 @@ class ProcessMonitor:
                 logging.info(f"Cooldown period expired for {service_name}. Re-enabling restarts.")
                 del self.disabled_services[service_name]
                 self.restart_timestamps[service_name] = []  # Reset restart history
-        
+
         if service_name not in self.restart_timestamps:
             self.restart_timestamps[service_name] = []
-        
+
         # Remove old timestamps outside the window
         timestamps = self.restart_timestamps[service_name]
         timestamps[:] = [ts for ts in timestamps if now - ts < self.restart_window]
-        
+
         # Check if we've exceeded restart limit
         if len(timestamps) >= self.max_restarts:
             logging.error(f"Service {service_name} has crashed {self.max_restarts} times in {self.restart_window}s. Disabling restarts for {self.cooldown_period/60:.0f} minutes.")
             self.disabled_services[service_name] = now
             return False
-        
+
         return True
 
     def restart_service(self, service: dict):
         """Restart a crashed service with rate limiting"""
         name = service['name']
-        
+
         if not self.should_restart_service(name):
             logging.error(f"Not restarting {name} - restart limit exceeded")
             return
-        
+
         # Record restart attempt
         if name not in self.restart_timestamps:
             self.restart_timestamps[name] = []
         self.restart_timestamps[name].append(time.time())
-        
+
         if name in self.processes:
             old_process = self.processes[name]
             if old_process.poll() is None:
@@ -461,7 +490,7 @@ class ProcessMonitor:
                             old_process._log_handle.close()
                         except Exception as log_error:
                             logging.warning(f"Error closing log file for {name}: {log_error}")
-                    
+
                     os.killpg(os.getpgid(old_process.pid), signal.SIGTERM)
                     # Same reasoning as stop_all_services: give rclone room to
                     # unmount rather than orphaning the mount point.
@@ -469,7 +498,7 @@ class ProcessMonitor:
                 except:
                     pass
             del self.processes[name]
-        
+
         logging.warning(f"Restarting crashed service: {name}")
         time.sleep(2)  # Brief delay before restart
         self.start_service(service)
@@ -478,28 +507,28 @@ class ProcessMonitor:
         """Check if it's time for a scheduled restart"""
         now = datetime.now()
         current_time = (now.hour, now.minute)
-        
+
         # Check if we've already done a scheduled restart today at this time
         if self.last_scheduled_restart:
             last_restart_date = self.last_scheduled_restart.date()
             last_restart_time = (self.last_scheduled_restart.hour, self.last_scheduled_restart.minute)
-            
+
             # If we already restarted today at this scheduled time, skip
             if last_restart_date == now.date() and last_restart_time in self.restart_times:
                 return False
-        
+
         # Check if current time matches any scheduled restart time
         for restart_hour, restart_minute in self.restart_times:
             if current_time == (restart_hour, restart_minute):
                 return True
-        
+
         return False
 
     def perform_scheduled_restart(self):
         """Perform a scheduled restart of all services"""
         now = datetime.now()
         logging.info(f"=== Performing scheduled restart at {now.strftime('%Y-%m-%d %H:%M:%S')} ===")
-        
+
         # Stop all services gracefully
         logging.info("Stopping all services for scheduled restart...")
         for name, process in list(self.processes.items()):
@@ -517,7 +546,7 @@ class ProcessMonitor:
                         process._log_handle.close()
                     except Exception as log_error:
                         logging.warning(f"Error closing log file for {name}: {log_error}")
-                
+
                 os.killpg(os.getpgid(process.pid), signal.SIGTERM)
                 process.wait(timeout=10)
                 logging.info(f"Service {name} stopped")
@@ -527,26 +556,26 @@ class ProcessMonitor:
                     os.killpg(os.getpgid(process.pid), signal.SIGKILL)
                 except:
                     pass
-        
+
         # Clear the processes dictionary, keeping any service we deliberately
         # left running so start_all_services does not launch a second copy.
         self.processes = {
             name: process for name, process in self.processes.items()
             if name in self.scheduled_restart_skip
         }
-        
+
         # Clear restart history for all services (fresh start)
         self.restart_timestamps.clear()
         self.disabled_services.clear()
-        
+
         # Wait a moment before restarting
         logging.info("Waiting 5 seconds before restarting services...")
         time.sleep(5)
-        
+
         # Start all services again
         logging.info("Starting all services after scheduled restart...")
         self.start_all_services()
-        
+
         # Update last scheduled restart time
         self.last_scheduled_restart = now
         logging.info(f"=== Scheduled restart completed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ===")
@@ -567,17 +596,17 @@ class ProcessMonitor:
         logging.info("Starting service monitoring...")
         consecutive_errors = 0
         max_consecutive_errors = 10
-        
+
         while self.running:
             try:
                 current_time = time.time()
-                
+
                 # Check for scheduled restart
                 if self.check_scheduled_restart():
                     self.perform_scheduled_restart()
                     # Continue monitoring after restart
                     continue
-                
+
                 # Check mount health periodically, but leave rclone alone while it
                 # is still coming up - killing it mid-startup is how the mount ends
                 # up permanently down.
@@ -591,7 +620,7 @@ class ProcessMonitor:
                     elif not self.check_mount_health():
                         self.restart_rclone_if_mount_failed()
                     self.last_mount_check = current_time
-                
+
                 for service in self.services:
                     name = service['name']
                     if name in self.processes:
@@ -599,30 +628,30 @@ class ProcessMonitor:
                         if not self.check_process(name, process):
                             logging.error(f"Service {name} has crashed!")
                             self.restart_service(service)
-                
+
                 consecutive_errors = 0  # Reset error count on successful iteration
                 time.sleep(5)  # Check every 5 seconds
-                
+
             except Exception as e:
                 consecutive_errors += 1
                 logging.error(f"Error in monitoring loop (attempt {consecutive_errors}): {e}")
                 logging.error(f"Traceback: {traceback.format_exc()}")
-                
+
                 if consecutive_errors >= max_consecutive_errors:
                     logging.critical("Too many consecutive monitoring errors. Exiting.")
                     break
-                
+
                 time.sleep(min(consecutive_errors * 2, 30))  # Exponential backoff, max 30s
 
     def stop_all_services(self):
         """Stop all running services"""
         logging.info("Stopping all services...")
         self.running = False
-        
+
         for name, process in self.processes.items():
             try:
                 logging.info(f"Stopping service: {name}")
-                
+
                 # Close log file handle if it exists
                 if hasattr(process, '_log_handle') and process._log_handle:
                     try:

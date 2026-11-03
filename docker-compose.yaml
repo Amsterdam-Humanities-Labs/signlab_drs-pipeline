@@ -1,0 +1,20 @@
+# Docker-compose definition for development
+services:
+  conversion:
+    build:
+      context: .
+      target: base
+    volumes:
+      - uv_env:/.venv
+      - type: bind
+        source: ./services
+        target: /conversion/services
+      - type: bind
+        source: ${OUTPUT_DIR}
+        target: /output
+    environment:
+      - SIGNCOLLECT_URL=${SIGNCOLLECT_URL}
+      - OUTPUT_DIR=${OUTPUT_DIR}
+      - DOCKERIZED=true
+volumes:
+  uv_env:

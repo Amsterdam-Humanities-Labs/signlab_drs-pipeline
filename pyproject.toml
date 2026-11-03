@@ -1,0 +1,24 @@
+[project]
+name = "SignCollect-video-conversion"
+version = "0.1.0"
+description = "Python scripts for cropping and converting videos"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "requests",
+    "numpy<2",
+    "opencv-python<4.11",
+]
+
+[dependency-groups]
+qr = [
+    "qreader",
+    "pyzbar",
+]
+services = [
+    "mediapipe>=0.10,<0.10.15",
+    "pyautogui",
+    "pynput",
+    "websocket-client",
+    "psutil",
+]

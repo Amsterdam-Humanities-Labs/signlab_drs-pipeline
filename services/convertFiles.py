@@ -1,35 +1,26 @@
 import os
-import sys
 import subprocess
 import requests
 import re
-from datetime import datetime, timedelta
 from pathlib import Path
-import json
 import time
-sys.path.insert(0, '/Users/signlab/drs/shared')
-from signcollect_monitor import SignCollectMonitor  # Import the monitor client
-from server_config import server_url
-from upload_reply import parse_upload_reply
-from mount_guard import safe_makedirs, wait_until_ready
-
-# Initialize the monitor
-monitor = SignCollectMonitor(
-    client_id='drs-converter',
-    client_name='DRS File Converter',
-    description='Video conversion and upload service',
-    heartbeat_interval=3600
-)
 
 # Configuration
-DEST_BASE_DIR = '/Users/signlab/signCollect/AIHR-FGW-TEST-SIGNLAB (Projectfolder)/studioFiles'
-UPLOAD_URL = server_url('videoProc/upload2.php')
+DEST_BASE_DIR = (
+    "/output"
+    if os.getenv("DOCKERIZED")
+    else os.getenv(
+        "OUTPUT_DIR",
+        "/Users/signlab/signCollect/AIHR-FGW-TEST-SIGNLAB (Projectfolder)/studioFiles",
+    )
+)
+UPLOAD_URL = os.getenv("SIGNCOLLECT_URL", "") + 'videoProc/upload2.php'
 
 def upload_file_to_server(file_path):
     """Upload a single file to signcollect.nl"""
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"File not found: {file_path}")
-    
+
     # Determine upload field
     ext = Path(file_path).suffix.lower()
     if ext in ['.jpg', '.jpeg', '.png']:
@@ -38,18 +29,19 @@ def upload_file_to_server(file_path):
         field = 'video'
     else:
         raise ValueError(f"Unsupported extension: {ext}")
-    
+
     print(f"→ uploading {file_path} as '{field}'")
-    
+
     try:
         with open(file_path, 'rb') as f:
             files = {field: (os.path.basename(file_path), f, 'application/octet-stream')}
             headers = {'Accept': 'application/json'}
-            
+
             response = requests.post(UPLOAD_URL, files=files, headers=headers, timeout=180)
-            result = parse_upload_reply(field, response.status_code, response.text)
-            print(f"← {field} upload succeeded. Server replied:", result)
-            return result
+            print(
+                f"← {field} upload succeeded. Server replied with {response.status_code}: {response.text}"
+            )
+
     except Exception as err:
         print(f"← upload error: {err}")
         raise
@@ -75,21 +67,24 @@ def run_ffmpeg_command(command):
         return False
 
 def get_video_duration(file_path):
-    """Get video duration using ffprobe.
+    """Get video duration using ffprobe."""
 
-    Uses the absolute ffprobe path: a bare `ffprobe` resolves against the
-    supervisor's PATH, which lacks /opt/homebrew/bin when startupScript is
-    launched at boot. That failed silently and returned 0, so every thumbnail
-    fell back to a hardcoded 1s instead of the midpoint - and at 1s the QR
-    monitor is often still blank, which is what broke QR matching. Reads
-    format=duration (always present) rather than stream=duration.
-    """
     try:
         result = subprocess.run(
-            ["/opt/homebrew/bin/ffprobe", "-v", "error",
-             "-show_entries", "format=duration",
-             "-of", "default=noprint_wrappers=1:nokey=1", file_path],
-            capture_output=True, text=True, timeout=30)
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "default=noprint_wrappers=1:nokey=1",
+                file_path,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
         if result.returncode == 0 and result.stdout.strip():
             return float(result.stdout.strip())
         print(f"ffprobe could not read duration for {file_path}: rc={result.returncode} {result.stderr.strip()[:120]}")
@@ -118,26 +113,29 @@ def is_valid_filename(filename):
 def process_directory(date_dir):
     """Process a single date directory"""
     print(f"Processing directory: {date_dir}")
-    
+
     # Define directories
     raw_dir = os.path.join(DEST_BASE_DIR, date_dir, 'raw')
     converted_dir = os.path.join(DEST_BASE_DIR, date_dir, 'converted')
     thumbnail_dir = os.path.join(DEST_BASE_DIR, date_dir, 'thumbnails')
-    
+
     # Check if raw directory exists
     if not os.path.exists(raw_dir):
         return
-    
+
     # Create converted and thumbnail directories if they don't exist
-    safe_makedirs(converted_dir)
-    safe_makedirs(thumbnail_dir)
-    
+    os.makedirs(converted_dir, exist_ok=True)
+    os.makedirs(thumbnail_dir, exist_ok=True)
+
     # Get all video files from raw directory
-    video_extensions = ['.mp4', '.mov', '.MP4', '.MOV']
-    raw_files = [f for f in os.listdir(raw_dir) 
-                 if any(f.lower().endswith(ext.lower()) for ext in video_extensions)
-                 and is_valid_filename(f)]
-    
+    video_extensions = ['.mp4', '.mov']
+    raw_files = [
+        f
+        for f in os.listdir(raw_dir)
+        if any(f.lower().endswith(ext) for ext in video_extensions)
+        and is_valid_filename(f)
+    ]
+
     for filename in raw_files:
         source_path = os.path.join(raw_dir, filename)
         destination_path = os.path.join(converted_dir, filename)
@@ -145,51 +143,52 @@ def process_directory(date_dir):
         # Left behind when an upload failed on a network error, so the upload
         # is retried even though the converted file already exists.
         upload_marker = os.path.splitext(destination_path)[0] + ".upload_failed"
-        
+
         conversion_happened = False
-        
+
         # Check if converted file already exists
         if not os.path.exists(destination_path):
             print(f"Converting: {filename}")
-            
+
             # Convert video file
-            ffmpeg_convert_command = f'/opt/homebrew/bin/ffmpeg -loglevel quiet -nostdin -i "{source_path}" -c:v libx264 -c:a aac -pix_fmt yuv420p -profile:v baseline -level 3 "{destination_path}" -n'
-            
+            ffmpeg_convert_command = f'ffmpeg -loglevel quiet -nostdin -i "{source_path}" -c:v libx264 -c:a aac -pix_fmt yuv420p -profile:v baseline -level 3 "{destination_path}" -n'
+
             if run_ffmpeg_command(ffmpeg_convert_command):
                 print(f"✓ Conversion successful: {filename}")
                 conversion_happened = True
             else:
                 print(f"✗ Conversion failed: {filename}")
                 continue
-        
+
         # Only proceed with thumbnail and upload if conversion happened
         # (or an earlier upload failed on a network error)
         if conversion_happened or upload_pending(upload_marker):
             # Check if thumbnail exists
             if not os.path.exists(thumbnail_path):
                 print(f"Generating thumbnail: {filename}")
-                
+
                 # Get video duration and calculate midpoint
                 duration = get_video_duration(destination_path)
                 midpoint = duration / 2 if duration > 0 else 1
-                
+
                 # Generate thumbnail
-                ffmpeg_thumbnail_command = f'/opt/homebrew/bin/ffmpeg -loglevel quiet -i "{destination_path}" -ss {midpoint} -vframes 1 "{thumbnail_path}" -y'
-                
+                ffmpeg_thumbnail_command = f'ffmpeg -loglevel quiet -i "{destination_path}" -ss {midpoint} -vframes 1 "{thumbnail_path}" -y'
+
                 if run_ffmpeg_command(ffmpeg_thumbnail_command):
                     print(f"✓ Thumbnail generated: {thumbnail_path}")
                 else:
                     print(f"✗ Thumbnail generation failed: {filename}")
                     continue
-            
+
             # Upload files since conversion just happened
-            wait_until_ready("convertFiles")
             try:
                 if os.path.exists(destination_path):
-                    upload_file_to_server(destination_path)
-                
+                    # upload_file_to_server(destination_path)
+                    print("would be uploading now")
+
                 if os.path.exists(thumbnail_path):
-                    upload_file_to_server(thumbnail_path)
+                    # upload_file_to_server(thumbnail_path)
+                    print("would be uploading now")
             except requests.exceptions.ConnectionError as e:
                 print(f"Upload failed for {filename} (network, will retry): {e}")
                 try:
@@ -200,6 +199,7 @@ def process_directory(date_dir):
                 continue
             except Exception as e:
                 print(f"Upload failed for {filename}: {e}")
+                continue
             clear_upload_marker(upload_marker)
 
 UPLOADED_MARKER_TEXT = "uploaded\n"
@@ -229,36 +229,25 @@ def clear_upload_marker(marker):
 
 def scan_and_process():
     """Main function to scan directories and process files"""
-    wait_until_ready("convertFiles")
-    print("Starting directory scan...")
-    
+
+    print(f"Starting directory scan of {DEST_BASE_DIR}...")
+
     # Get all date directories
     existing_dirs = get_all_date_dirs()
 
     print(f"Found {len(existing_dirs)} existing directories to process")
-    
+
     # Process each directory
     for date_dir in existing_dirs:
         process_directory(date_dir)
-    
+
     print("Directory scan completed")
+    return
+
 
 def main():
-    """Main loop that runs every hour"""
-    # Register with monitoring system
-    monitor.register()
+    scan_and_process()
 
-    while True:
-        try:
-            # Send heartbeat at start of each cycle
-            monitor.send_heartbeat()
-
-            scan_and_process()
-        except Exception as e:
-            print(f"Error during processing: {e}")
-
-        print("Sleeping for 1 hour...")
-        time.sleep(900)  # Sleep for 1 hour
 
 if __name__ == "__main__":
     main()
