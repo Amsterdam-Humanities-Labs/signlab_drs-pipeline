@@ -183,12 +183,10 @@ def process_directory(date_dir):
             # Upload files since conversion just happened
             try:
                 if os.path.exists(destination_path):
-                    # upload_file_to_server(destination_path)
-                    print("would be uploading now")
+                    upload_file_to_server(destination_path)
 
                 if os.path.exists(thumbnail_path):
-                    # upload_file_to_server(thumbnail_path)
-                    print("would be uploading now")
+                    upload_file_to_server(thumbnail_path)
             except requests.exceptions.ConnectionError as e:
                 print(f"Upload failed for {filename} (network, will retry): {e}")
                 try:
